@@ -1,0 +1,10 @@
+#define IDD_DLG_PROGRESS        1000
+#define IDC_GRP1                1002
+#define IDC_GRP2                1003
+#define IDC_STATIC_STATUS       1001
+#define IDC_PGB                 1004
+#define IDD_DLG_UNMOUNT_IMAGE   1100
+#define IDC_GRP3                1102
+#define IDC_CBO_IMG_UNMOUNT     1101
+#define IDC_BTN_CANCEL          1103
+#define IDC_BTN_UNMOUNT         1104

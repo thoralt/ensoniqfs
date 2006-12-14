@@ -1,0 +1,5 @@
+[plugininstall]
+description=Ensoniq filesystem plugin
+type=wfx
+file=EnsoniqFS.wfx
+defaultdir=EnsoniqFS
