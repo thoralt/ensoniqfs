@@ -10,3 +10,8 @@ http://www.shlock.co.uk/Utils/OmniFlop/OmniFlop.htm
 
 Developers on EnsoniqFS plugin:
 Thoralt Franz
+
+Special thanks go to Gary Giebler for his detailed description of the Ensoniq
+diskette format. Whithout these details this project wouldn't have been
+possible.
+
