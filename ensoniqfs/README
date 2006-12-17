@@ -44,19 +44,15 @@ interested, you can check out the source codes as well.
 3 Installation
 --------------
 
-3.1 EnsoniqFS
+3.1 EnsoniqFS, ETools
 
 To use EnsoniqFS, you first need to have Total Commander installed. Download
 your copy from http://www.ghisler.com. Installation is straightforward, there
 shouldn't be any problems.
 
-Then, use Total Commander to navigate to the EnsoniqFS ZIP file you downloaded
-from SourceForge. Hit <enter> on the ZIP file - Total Commander will open it
-and automatically detect that it is a plugin. You're then guided through the
-installation by Total Commander. It just requires a few more hits on <enter>
-and your installation is finished, but make sure, that the plugin is installed
-inside the Total Commander directory. If you install it to another location,
-ETools will fail to find it.
+Then, run the installer for EnsoniqFS. Every file will be copied to its
+location, the INI file of Total Commander will be modified. You will have to
+restart Total Commander after installation to gain access to the plugin.
 
 3.2 OmniFlop driver
 
@@ -86,11 +82,6 @@ appropriate values already filled in. Enter your email address and submit
 the form. A new license will be emailed to you instantly. Copy the license 
 key you got via mail and paste it into the OmniFlop registration window.
 Click OK and you are done!
-
-3.3 ETools
-
-Until a complete installer is ready, you can copy the ETools.exe to anywhere
-you want. You can directly start and use it.
 
 4 Using EnsoniqFS
 
