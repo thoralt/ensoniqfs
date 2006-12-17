@@ -40,19 +40,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "omniflop.h"
+#include "diskstructure.h"
 
 #define DLLEXPORT __declspec (dllexport)
-
-#define TYPE_DISK	0
-#define TYPE_CDROM	1
-#define TYPE_FILE	2
-#define TYPE_FLOPPY	3
-
-#define IMAGE_FILE_UNKNOWN	0
-#define IMAGE_FILE_ISO		1
-#define IMAGE_FILE_MODE1	2
-#define IMAGE_FILE_GKH		3
-#define IMAGE_FILE_GIEBLER	4
 
 #define READ_AHEAD	256
 
@@ -65,38 +55,6 @@ typedef struct _INI_LINE
 	char *cLine;
 	struct _INI_LINE *pPrevious, *pNext;
 } INI_LINE;
-
-//----------------------------------------------------------------------------
-// disk descriptor
-//----------------------------------------------------------------------------
-typedef struct _DISK
-{
-	char cMsDosName[260];	// device name starting with "\\.\" or image file
-	char cLongName[260];	// long device name or image file
-	char cDiskLabel[8];		// Ensoniq disk label
-	char cLegalDiskLabel[8];// DOS disk label made out of cDiskLabel
-	DWORD dwBlocks;			// number of logical blocks on this disk
-	DWORD dwBlocksFree;		// number of free blocks on this disk
-	DWORD dwPhysicalBlocks; // number of physical blocks on this disk
-	HANDLE hHandle;			// handle for direct access
-	int iType;				// TYPE_DISK | TYPE_CDROM | TYPE_FILE | TYPE_FLOPPY
-	int iImageType;			// subtype if disk is an image file
-	unsigned char *ucCache;	// pointer to cache memory
-	DWORD *dwCacheTable;	// which blocks are in cache?
-	DWORD *dwCacheAge;		// the age of each cache entry
-	unsigned char *ucCacheFlags;	// flags (dirty flag)
-	DWORD dwCacheHits;
-	DWORD dwCacheMisses;
-	DWORD dwFATCacheBlock;	// number of block in FAT cache
-	DWORD dwFATMiss, dwFATHit;
-	DWORD dwLastFreeFATEntry;	// marks the last free FAT entry to speedup
-								// the search for the next free one
-	unsigned char ucFATCache[512];	// FAT cache (one block)
-	DWORD dwReadCounter;	// counter of read accesses (for cache age)
-	DISK_GEOMETRY_EX DiskGeometry;
-	int iIsEnsoniq;			// flag for filesystem type
-	struct _DISK *pNext;	// pointer to next disk descriptor
-} DISK;
 
 //----------------------------------------------------------------------------
 // Prototypes

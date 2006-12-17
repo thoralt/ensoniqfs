@@ -39,7 +39,7 @@
 // logging on/off
 //----------------------------------------------------------------------------
 // If you want to have logging built in, uncomment the line below
-#define LOGGING 1
+//#define LOGGING 1
 
 //----------------------------------------------------------------------------
 // logfile
