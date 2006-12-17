@@ -1,7 +1,7 @@
 [Project]
 FileName=EnsoniqFS.dev
 Name=EnsoniqFS
-UnitCount=18
+UnitCount=19
 Type=3
 Ver=1
 ObjFiles=
@@ -219,6 +219,16 @@ FileName=LICENSE
 Folder=
 Compile=0
 Link=0
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit19]
+FileName=diskstructure.h
+CompileCpp=0
+Folder=
+Compile=1
+Link=1
 Priority=1000
 OverrideBuildCmd=0
 BuildCmd=
