@@ -514,7 +514,7 @@ int ReadDirectoryFromPath(FIND_HANDLE *pHandle)
 // the entry for the current directory in the parent directory with the
 // appropriate number of files (=size of a directory)
 //
-// The write cache is not flushed!
+// The write cache is not flushed, you have to do this manually!
 // 
 // -> cCurrentDir = pointer to current directory name
 // <- ERR_OK
@@ -1056,160 +1056,108 @@ int CopyEnsoniqFile(DISK *pDestDisk, int iMode, FILE *f, DISK *pSourceDisk,
 {
 #define READ_COUNT 64
 
-	unsigned char ucBuf[512*READ_COUNT];
-	DWORD dwStart, dwReadBlock, dwBytesRead;
-	int i, j, iEOF, iResult;
+	unsigned char ucBuf[512*READ_COUNT], ucContiguous = 0;
+	DWORD dwStart, dwReadBlock, dwWriteBlock = 0, dwBytesRead, dwBlocks, 
+		dwNextBlock;
+	int i, j, iEOF, iResult, iContiguousFlag = 1;
 	
 	dwReadBlock = dwSourceStart;
 	
 	// try to find a contiguous block of free space for the file
 	dwStart = GetContiguousBlocks(pDestDisk, dwLen);
-	if(dwStart)
+	if(dwStart) ucContiguous = 1;
+	
+	if(ucContiguous)
 	{
+		// we got <dwLen> contiguous blocks, file can be written as one chunk
 		*dwContiguous = dwLen;
 		
 		// loop through file
 		LOG("Writing "); LOG_INT(dwLen); 
 		LOG(" contiguous blocks: ");
-		iEOF = 0;
-		for(i=0; i<(int)dwLen/READ_COUNT; i++)
+	}
+	else // non-contiguous file
+	{
+		// get first single free block
+		*dwContiguous = 1; iContiguousFlag = 1;
+		dwStart = GetContiguousBlocks(pDestDisk, 1);
+		dwWriteBlock = dwStart;
+		if(0==dwStart)
 		{
-			if(COPY_DOS==iMode)
-			// read blocks from file handle
-			{
-				// read blocks
-				dwBytesRead = fread(ucBuf, 1, 512*READ_COUNT, f);
-				if(512*READ_COUNT!=dwBytesRead)
-				{
-					LOG("Error reading local file (block ");
-					LOG_INT(i*READ_COUNT); LOG("-"); 
-					LOG_INT((i+1)*READ_COUNT-1); LOG(", tried to read ");
-					LOG_INT(READ_COUNT); LOG(", got "); 
-					LOG_INT(dwBytesRead/512); LOG(").\n");
-					return ERR_LOCAL_READ;
-				}
-			}
-			else if(COPY_ENSONIQ==iMode)
-			// read blocks from Ensoniq disk
-			{
-				for(j=0; j<READ_COUNT; j++)
-				{
-					// read block from Ensoniq device
-					iResult = ReadBlock(pSourceDisk, dwReadBlock, ucBuf+j*512);
-					if(ERR_OK!=iResult)
-					{
-						LOG("Error reading block from Ensoniq device.\n");
-						return iResult;
-					}
-					
-					// get next block from FAT
-					dwReadBlock = GetFATEntry(pSourceDisk, dwReadBlock);
-					if(-1==(int)dwReadBlock)
-					{
-						LOG("Error reading FAT entry.\n");
-						return ERR_READ;
-					}
-					
-					// empty block, EOF or bad block?
-					if(dwReadBlock<3)
-					{
-						if((DWORD)(i*READ_COUNT+j)<(dwLen-1))
-						{
-							LOG("Error: EOF before iLen was reached.\n");
-						}
-						j = READ_COUNT; i = dwLen/READ_COUNT; iEOF = 1; break;
-					}
-				}
-			}
-			else
-			{
-				LOG("Error: Unsupported copy mode.\n");
-				return ERR_NOT_SUPPORTED;
-			}
-			
-			// write blocks
-			iResult = WriteBlocks(pDestDisk, dwStart+i*READ_COUNT, 
-								  READ_COUNT, ucBuf);
-			if(ERR_OK!=iResult)
-			{
-				LOG("Error writing Ensoniq file, code=");
-				LOG_INT(iResult); LOG(".\n");
-				return ERR_WRITE;
-			}
-
-			// notify TotalCmd of progress, check for user abort
-			if(1==g_pProgressProc(g_iPluginNr, cLocalName, cRemoteName, 
-								  100*i*READ_COUNT/dwLen))
-			{
-				// if user wants to abort, undo FAT changes before returning
-				LOG("Aborting, undo FAT changes: ");
-				for(i=0; i<(int)dwLen; i++)
-					SetFATEntry(pDestDisk, dwStart+i, 0);
-				LOG("OK.\n");
-				CacheFlush(pDestDisk);
-				return ERR_ABORTED;
-			}
+			MessageBoxA(0, "The disk is full.", 
+				"EnsoniqFS · Warning", MB_ICONWARNING);
+			return FS_FILE_WRITEERROR;
 		}
 		
-		// copy rest of file
-		if((dwLen%READ_COUNT)&&(0==iEOF))
+		// loop through file
+		LOG("Writing "); LOG_INT(dwLen); 
+		LOG(" non-contiguous blocks: ");
+	}
+	
+	iEOF = 0; i = 0;
+	while((i<(int)dwLen)&&(!iEOF))
+	{
+		dwBlocks = READ_COUNT;
+		if((dwBlocks+i)>dwLen) dwBlocks = dwLen - i;
+		
+		if(COPY_DOS==iMode)
+		// read blocks from file handle
 		{
-			if(COPY_DOS==iMode)
-			// read blocks from file handle
+			// read blocks
+			dwBytesRead = fread(ucBuf, 1, 512*dwBlocks, f);
+			if(512*dwBlocks!=dwBytesRead)
 			{
-				// read blocks
-				dwBytesRead = fread(ucBuf, 1, (dwLen%READ_COUNT*512), f);
-				if(((dwLen%READ_COUNT)*512)!=dwBytesRead)
-				{
-					LOG("Error reading local file (block ");
-					LOG_INT(i*READ_COUNT); LOG("-"); 
-					LOG_INT((i+1)*READ_COUNT-1); LOG(", tried to read ");
-					LOG_INT(dwLen%READ_COUNT); LOG(", got "); 
-					LOG_INT(dwBytesRead/512); LOG(").\n");
-					return ERR_LOCAL_READ;
-				}
+				LOG("Error reading local file (block ");
+				LOG_INT(i); LOG("-"); 
+				LOG_INT(i+dwBlocks); LOG(", tried to read ");
+				LOG_INT(dwBlocks); LOG(", got "); 
+				LOG_INT(dwBytesRead/512); LOG(").\n");
+				return ERR_LOCAL_READ;
 			}
-			else if(COPY_ENSONIQ==iMode)
-			// read blocks from Ensoniq disk
-			{
-				for(j=0; j<READ_COUNT; j++)
-				{
-					// read block from Ensoniq device
-					iResult = ReadBlock(pSourceDisk, dwReadBlock, ucBuf+j*512);
-					if(ERR_OK!=iResult)
-					{
-						LOG("Error reading block from Ensoniq device.\n");
-						return iResult;
-					}
-					
-					// get next block from FAT
-					dwReadBlock = GetFATEntry(pSourceDisk, dwReadBlock);
-					if(-1==(int)dwReadBlock)
-					{
-						LOG("Error reading FAT entry.\n");
-						return ERR_READ;
-					}
-					
-					// empty block, EOF or bad block?
-					if(dwReadBlock<3)
-					{
-						if((DWORD)(i*READ_COUNT+j)<(dwLen-1))
-						{
-							LOG("Error: EOF before iLen was reached.\n");
-						}
-						j = READ_COUNT; i = dwLen/READ_COUNT; iEOF = 1; break;
-					}
-				}
-			}
-			else
-			{
-				LOG("Error: Unsupported copy mode.\n");
-				return ERR_NOT_SUPPORTED;
-			}
+		}
+		else if(COPY_ENSONIQ==iMode)
 
-			// write blocks
-			iResult = WriteBlocks(pDestDisk, dwStart+dwLen-(dwLen%READ_COUNT),
-								  dwLen%READ_COUNT, ucBuf);
+		// read blocks from Ensoniq disk
+		{
+			for(j=0; j<(int)dwBlocks; j++)
+			{
+				// read block from Ensoniq device
+				iResult = ReadBlock(pSourceDisk, dwReadBlock, ucBuf+j*512);
+				if(ERR_OK!=iResult)
+				{
+					LOG("Error reading block from Ensoniq device.\n");
+					return iResult;
+				}
+				
+				// get next block from FAT
+				dwReadBlock = GetFATEntry(pSourceDisk, dwReadBlock);
+				if(-1==(int)dwReadBlock)
+				{
+					LOG("Error reading FAT entry.\n");
+					return ERR_READ;
+				}
+				
+				// empty block, EOF or bad block?
+				if(dwReadBlock<3)
+				{
+					if((DWORD)(i+j)<(dwLen-1))
+					{
+						LOG("Error: EOF before dwLen was reached.\n");
+					}
+					iEOF = 1; break;
+				}
+			}
+		}
+		else
+		{
+			LOG("Error: Unsupported copy mode.\n");
+			return ERR_NOT_SUPPORTED;
+		}
+
+		if(ucContiguous)
+		{		
+			// write blocks for contiguous file
+			iResult = WriteBlocks(pDestDisk, dwStart+i, dwBlocks, ucBuf);
 			if(ERR_OK!=iResult)
 			{
 				LOG("Error writing Ensoniq file, code=");
@@ -1217,8 +1165,96 @@ int CopyEnsoniqFile(DISK *pDestDisk, int iMode, FILE *f, DISK *pSourceDisk,
 				return ERR_WRITE;
 			}
 		}
-		LOG("OK.\n");
+		else
+		{
+			// write non-contiguous blocks
+			for(j=0; j<(int)dwBlocks; j++)
+			{
+				LOG("Writing 1 block at "); LOG_INT(dwWriteBlock); LOG(": ");
+				iResult = WriteBlocks(pDestDisk, dwWriteBlock, 1, ucBuf+j*512);
+				if(ERR_OK!=iResult)
+				{
+					LOG("Error writing Ensoniq file, code=");
+					LOG_INT(iResult); LOG(".\n");
+					return ERR_WRITE;
+				}
+				
+				// mark this block used so next call to GetContiguousBlocks()
+				// won't deliver the same block, as a side effect this block
+				// gets set to EOF but will be written with the real value if
+				// EOF is not yet reached
+				SetFATEntry(pDestDisk, dwWriteBlock, 1);
+				
+				// if not EOF, allocate a new block
+				if((i+j)<(int)(dwLen-1))
+				{
+					// get next free FAT entry
+					dwNextBlock = GetContiguousBlocks(pDestDisk, 1);
+					if(0==dwNextBlock)
+					{
+						// undo changes to FAT
+						dwNextBlock = dwStart;
+						while(dwNextBlock!=dwWriteBlock)
+						{
+							// mark block as free
+							dwNextBlock = SetFATEntry(pDestDisk, 
+								dwNextBlock, 0);
+							if((-1==(int)dwNextBlock)||(dwNextBlock<3)) break;
+						}
+						CacheFlush(pDestDisk);
+	
+						MessageBoxA(0, "The disk is full or not writable.", 
+							"EnsoniqFS · Warning", MB_ICONWARNING);
+						return FS_FILE_WRITEERROR;
+					}
+					
+					// set current FAT entry to point to next entry
+					SetFATEntry(pDestDisk, dwWriteBlock, dwNextBlock);
+					
+					// count contiguous blocks
+					if((dwNextBlock==(dwWriteBlock+1))&&(0!=iContiguousFlag))
+					{
+						*dwContiguous++;
+					}
+					else iContiguousFlag = 0;
+					
+					dwWriteBlock = dwNextBlock;
+				}
+			}
+			LOG("OK.\n");
+		}
+		
+		// notify TotalCmd of progress, check for user abort
+		if(1==g_pProgressProc(g_iPluginNr, cLocalName, cRemoteName, 
+							  100*i/dwLen))
+		{
+			// if user wants to abort, undo FAT changes before returning
+			LOG("Aborting, undo FAT changes: ");
+			if(!ucContiguous)
+			{
+				// undo non-contiguous FAT changes only, contiguous FAT changes
+				// would be done below, so no need to undo them here
+				dwNextBlock = dwStart;
+				while(dwNextBlock!=dwWriteBlock)
+				{
+					// mark block as free
+					dwNextBlock = SetFATEntry(pDestDisk, dwNextBlock, 0);
+					if((-1==(int)dwNextBlock)||(dwNextBlock<3)) break;
+				}
+			}
+			
+			LOG("OK.\n");
+			CacheFlush(pDestDisk);
+			return ERR_ABORTED;
+		}
+		
+		// increase counter
+		i += dwBlocks;
+	}
+	LOG("OK.\n");
 
+	if(ucContiguous) // write all FAT entries in at once for contiguous files
+	{
 		// set all FAT entries
 		LOG("Writing FAT entries: ");
 		for(i=0; i<(int)(dwLen-1); i++)
@@ -1237,17 +1273,10 @@ int CopyEnsoniqFile(DISK *pDestDisk, int iMode, FILE *f, DISK *pSourceDisk,
 			return ERR_WRITE;
 		}
 		LOG("OK.\n");
-
 	}
-	else
-	{
-		return FS_FILE_WRITEERROR;
 
-		// TODO: write non-contiguous blocks
-	}
-	
+	// set external pointer to starting block
 	*dwDestStart = dwStart;
-	
 	return ERR_OK;
 }
 
