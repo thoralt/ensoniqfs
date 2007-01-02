@@ -43,11 +43,16 @@
 //----------------------------------------------------------------------------
 // externals
 //----------------------------------------------------------------------------
-extern HINSTANCE g_hInst;		// instance handle of DLL, used for creating
-								// progress dialog
 extern FsDefaultParamStruct g_DefaultParams;	// initialization parameters
-								// for DLL, used to find INI file
+								// for DLL, needed to find INI file
 extern DISK *g_pDiskListRoot;	// pointer to global device list root
+
+// global options
+extern int g_iOptionEnableFloppy;
+extern int g_iOptionEnableCDROM;
+extern int g_iOptionEnableImages;
+extern int g_iOptionEnablePhysicalDisks;
+extern int g_iOptionAutomaticRescan;
 
 //----------------------------------------------------------------------------
 // GetShortEnsoniqFiletype
@@ -901,22 +906,27 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		// check only physical drives, image files, floppies and CDROMs
 		if(0==strncmp(cMsDosName, "\\\\.\\PhysicalDrive", 17))
 		{
+			if(!g_iOptionEnablePhysicalDisks) continue;
 			iType = TYPE_DISK;
 		}
 		else if(0==strncmp(cMsDosName, "\\\\.\\CdRom", 9))
 		{
+			if(!g_iOptionEnableCDROM) continue;
 			iType = TYPE_CDROM;
 		}
 		else if(0==strncmp(cMsDosName, "\\\\.\\A:", 6))
 		{
+			if(!g_iOptionEnableFloppy) continue;
 			iType = TYPE_FLOPPY;
 		}
 		else if(0==strncmp(cMsDosName, "\\\\.\\B:", 6))
 		{
+			if(!g_iOptionEnableFloppy) continue;
 			iType = TYPE_FLOPPY;
 		}
 		else if(0==strncmp(cMsDosName, "\\\\.\\image=", 10))
 		{
+			if(!g_iOptionEnableImages) continue;
 			iType = TYPE_FILE;
 			for(j=10; j<(int)strlen(cMsDosName); j++) 
 				if('\\'==cMsDosName[j]) cMsDosName[j] = '/';

@@ -48,6 +48,7 @@
 #include "EnsoniqFS.h"
 #include "error.h"
 #include "cache.h"
+#include "optionsdlg.h"
 
 //----------------------------------------------------------------------------
 // globals
@@ -67,6 +68,13 @@ tProgressProc g_pProgressProc;
 tLogProc g_pLogProc;
 tRequestProc g_pRequestProc;
 HINSTANCE g_hInst = 0;
+
+// global options
+int g_iOptionEnableFloppy = 1;
+int g_iOptionEnableCDROM = 1;
+int g_iOptionEnableImages = 1;
+int g_iOptionEnablePhysicalDisks = 1;
+int g_iOptionAutomaticRescan = 1;
 
 // flag for operations on multiple files to flush the cache only once after
 // the last file
@@ -660,9 +668,13 @@ DLLEXPORT HANDLE __stdcall FsFindFirst(char* cPath, WIN32_FIND_DATA *FindData)
 	// is this the root?
 	if(0==GetDirectoryLevel(cPath))
 	{
-		// Rescan devices
-		FreeDiskList(1, g_pDiskListRoot);
-		g_pDiskListRoot = ScanDevices(0);
+		// Rescan devices if necessary
+		if((NULL==g_pDiskListRoot)||
+			(g_pDiskListRoot&&g_iOptionAutomaticRescan))
+		{
+			FreeDiskList(1, g_pDiskListRoot);
+			g_pDiskListRoot = ScanDevices(0);
+		}
 		
 		FsFindNext(pHandle, FindData);
 		return pHandle;
@@ -692,7 +704,7 @@ DLLEXPORT int __stdcall FsExtractCustomIcon(char* RemoteName,
 }
 */
 
-/*
+
 //----------------------------------------------------------------------------
 // FsExecuteFile
 //
@@ -704,14 +716,23 @@ DLLEXPORT int __stdcall FsExecuteFile(HWND MainWin, char* RemoteName,
 	LOG(", RemoteName=\"");
 	LOG(RemoteName); LOG("\", Verb=\""); LOG(Verb); LOG("\"\n");
 
-	// let TotalCommander handle all .efe files (with EnsoniqUnpackerEFE)
-	if(0==strcmp(RemoteName + strlen(RemoteName) - 4, ".efe"))
+	if((0==strcmp(RemoteName, "\\Options"))&&(0==strcmp(Verb, "open")))
 	{
-		return FS_EXEC_YOURSELF;
+		CreateOptionsDialogModal();
 	}
+	
+	if((0==strcmp(RemoteName, "\\Rescan devices"))&&(0==strcmp(Verb, "open")))
+	{
+		FreeDiskList(1, g_pDiskListRoot);
+		g_pDiskListRoot = ScanDevices(0);
+	}
+
+
 	return FS_EXEC_OK;
+	
+	MainWin=MainWin;
 }
-*/
+
 
 //----------------------------------------------------------------------------
 // FsFindNext
@@ -722,10 +743,12 @@ DLLEXPORT BOOL __stdcall FsFindNext(HANDLE Handle, WIN32_FIND_DATA *FindData)
 	FIND_HANDLE *pHandle = (FIND_HANDLE*) Handle;
 	int i, iDirectoryLevel;
 	DISK *pDisk;
-	char cFree[128];
-	char cRootDir[] =	"Physical disks\n"
-						"CDROMs\n"
-						"Image files\n";
+	char cFree[128], cType;
+	char cRootDir[] =	"dPhysical disks\n"
+						"dCDROMs\n"
+						"dImage files\n"
+						"fOptions\n"
+						"fRescan devices\n";
 						
 	// check pointer
 	if(NULL==pHandle)
@@ -754,12 +777,14 @@ DLLEXPORT BOOL __stdcall FsFindNext(HANDLE Handle, WIN32_FIND_DATA *FindData)
 		
 		
 		// copy name
+		cType = cRootDir[pHandle->iNextDirIndex++];
 		i=0; while('\n'!=cRootDir[pHandle->iNextDirIndex])
 		{
 			FindData->cFileName[i++] = cRootDir[pHandle->iNextDirIndex++];
 		}
 
-		FindData->dwFileAttributes = FILE_ATTRIBUTE_DIRECTORY;
+		// make every file but "Options" a directory
+		if('d'==cType) FindData->dwFileAttributes = FILE_ATTRIBUTE_DIRECTORY;
 
 		pHandle->iNextDirIndex++;
 		LOG("Returning \""); LOG(FindData->cFileName); LOG("\"\n");
@@ -1718,6 +1743,8 @@ DLLEXPORT int __stdcall FsGetFile(char* RemoteName, char* LocalName,
 	}
 	
 	return FS_FILE_OK;
+	
+	ri=ri;
 }
 
 //----------------------------------------------------------------------------
@@ -2166,6 +2193,8 @@ DLLEXPORT void __stdcall FsStatusInfo(char* RemoteDir, int InfoStartEnd,
 //----------------------------------------------------------------------------
 DLLEXPORT void __stdcall FsSetDefaultParams(FsDefaultParamStruct* dps)
 {
+	INI_LINE *pLine, *pIniFile;
+
 	LOG("FsSetDefaultParams(): DefaultIniName=\"");
 	LOG(dps->DefaultIniName); LOG("\", PluginInterfaceVersionHi=");
 	LOG_INT(dps->PluginInterfaceVersionHi);
@@ -2173,8 +2202,72 @@ DLLEXPORT void __stdcall FsSetDefaultParams(FsDefaultParamStruct* dps)
 	LOG_INT(dps->PluginInterfaceVersionLow); LOG(", size="); 
 	LOG_INT(dps->size); LOG("\n");
 	
+	// save default param struct
 	memcpy(&g_DefaultParams, dps, sizeof(FsDefaultParamStruct));
 
+	// read and parse INI file
+	LOG("Reading INI file: ");
+	if(ERR_OK!=ReadIniFile(g_DefaultParams.DefaultIniName, &pIniFile))
+	{
+		LOG("failed.\n");
+		return;
+	}
+	LOG("OK.\nParsing: ");
+
+	// try to find section header
+	pLine = pIniFile;
+	while(pLine)
+	{	
+		if(0==strncmp("[EnsoniqFS]", pLine->cLine, 11))
+		{
+			LOG("[EnsoniqFS] found.\n");
+			break;
+		}
+		pLine = pLine->pNext;
+	}
+
+	// section not found?
+	if(NULL==pLine)
+	{
+		LOG("[EnsoniqFS] section not found.\n");
+		FreeIniLines(pIniFile);
+		return;
+	}
+	
+	// skip [EnsoniqFS] section name
+	pLine = pLine->pNext;
+
+	// parse all lines after [EnsoniqFS]
+	while(pLine)
+	{
+		// next section found?
+		if('['==pLine->cLine[0]) break;
+		
+		if(0==strncmp("EnableFloppy=", pLine->cLine, 13))
+		{
+			g_iOptionEnableFloppy = pLine->cLine[13]-0x30;
+		}
+		else if(0==strncmp("EnableCDROM=", pLine->cLine, 12))
+		{
+			g_iOptionEnableCDROM = pLine->cLine[12]-0x30;
+		}
+		else if(0==strncmp("EnablePhysicalDisks=", pLine->cLine, 20))
+		{
+			g_iOptionEnablePhysicalDisks = pLine->cLine[20]-0x30;
+		}
+		else if(0==strncmp("EnableImages=", pLine->cLine, 13))
+		{
+			g_iOptionEnableImages = pLine->cLine[13]-0x30;
+		}
+		else if(0==strncmp("AutomaticRescan=", pLine->cLine, 16))
+		{
+			g_iOptionAutomaticRescan = pLine->cLine[16]-0x30;
+		}
+		
+		pLine = pLine->pNext;
+	}
+	
+	FreeIniLines(pIniFile);
 }
 
 //----------------------------------------------------------------------------
@@ -2536,9 +2629,6 @@ BOOL APIENTRY DllMain (HINSTANCE hInst /*Library instance handle.*/,
 /*
 TODO:
 	
-CopyEnsoniqFile():
-- write non-contiguous files	
-
 WriteBlocks(), WriteBlocksUncached(), ReadBlocks(), ReadBlock(), ScanDevices():
 - support for image files other than ISO (GKH, EDE/EDT/EDA, Mode1CD)
 
@@ -2552,4 +2642,9 @@ CacheFlush()
 General:
 - add options dialog
 - add mount/unmount image files dialog
+
+DONE:
+CopyEnsoniqFile():
+- write non-contiguous files
+
 */

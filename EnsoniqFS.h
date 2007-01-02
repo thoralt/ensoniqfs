@@ -102,13 +102,13 @@ DLLEXPORT void __stdcall FsStatusInfo(char* RemoteDir, int InfoStartEnd,
 	int InfoOperation);
 DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 	BOOL OverWrite, RemoteInfoStruct* ri);
+DLLEXPORT int __stdcall FsExecuteFile(HWND MainWin, char* RemoteName,
+	char* Verb);
 	
 /* not used at the moment
 DLLEXPORT int __stdcall FsExtractCustomIcon(char* RemoteName,
 											int ExtractFlags,
 											HICON* TheIcon);
-DLLEXPORT int __stdcall FsExecuteFile(HWND MainWin, char* RemoteName, 
-									  char* Verb);
 
 */
 

@@ -44,8 +44,8 @@
 //----------------------------------------------------------------------------
 // global flags and variables
 //----------------------------------------------------------------------------
-BOOL m_bDone = FALSE; 
-HWND m_hWnd = NULL;
+BOOL m_bProgressDone = FALSE; 
+HWND m_hProgressWnd = NULL;
 extern HINSTANCE g_hInst;
 
 //----------------------------------------------------------------------------
@@ -67,8 +67,8 @@ void ProgressDialogThread(void *dummy)
 	LOG("ProgressDialogThread() started. ");
 	
     // create the dialog window
-	m_hWnd = CreateDialog(g_hInst, MAKEINTRESOURCE(IDD_DLG_PROGRESS), 0, 0);
-	hWnd = m_hWnd;
+	m_hProgressWnd = CreateDialog(g_hInst, MAKEINTRESOURCE(IDD_DLG_PROGRESS), 0, 0);
+	hWnd = m_hProgressWnd;
 	if(hWnd!=NULL)
 	{
 		// show dialog
@@ -79,7 +79,7 @@ void ProgressDialogThread(void *dummy)
 	else
 	{
 		LOG("CreateDialog() failed.\n");
-		m_bDone = TRUE;
+		m_bProgressDone = TRUE;
 		return;
 	}
 	
@@ -96,7 +96,7 @@ void ProgressDialogThread(void *dummy)
 			{
 				LOG("ProgressDialogThread() stop: ");
 				DestroyWindow(hWnd); 
-				m_bDone = TRUE; 
+				m_bProgressDone = TRUE; 
 				LOG("OK.\n");
 				break;
 			} 
@@ -128,7 +128,7 @@ void ProgressDialogThread(void *dummy)
 					}
 					// destroy the dialog and get out of the message loop 
 					DestroyWindow(hWnd);
-					m_bDone = TRUE;
+					m_bProgressDone = TRUE;
 					break;
 				} 
 			} 
@@ -139,7 +139,7 @@ void ProgressDialogThread(void *dummy)
 		}
 		else
 		{
-			m_bDone = TRUE; 
+			m_bProgressDone = TRUE; 
 			break; 
 		}
 	} 
@@ -157,18 +157,18 @@ void ProgressDialogThread(void *dummy)
 void UpdateProgressDialog(char *cText, int iProgress)
 {
 	// check handle
-	if(NULL==m_hWnd)
+	if(NULL==m_hProgressWnd)
 	{
-		LOG("UpdateProgressDialog(): Warning: m_hWnd==NULL\n");
+		LOG("UpdateProgressDialog(): Warning: m_hProgressWnd==NULL\n");
 		return;
 	}
 
 	// update text
-	SendMessage(GetDlgItem(m_hWnd, IDC_STATIC_STATUS), (UINT)WM_SETTEXT,
+	SendMessage(GetDlgItem(m_hProgressWnd, IDC_STATIC_STATUS), (UINT)WM_SETTEXT,
 		(WPARAM)0, (LPARAM) cText);
 
 	// update progress bar
-	SendMessage(GetDlgItem(m_hWnd, IDC_PGB), (UINT)PBM_SETPOS,
+	SendMessage(GetDlgItem(m_hProgressWnd, IDC_PGB), (UINT)PBM_SETPOS,
 		(WPARAM)iProgress, 0);
 	
 	Sleep(10);
@@ -188,7 +188,7 @@ int CreateProgressDialog()
 	LOG("CreateProgressDialog(): ");
 	
 	// check handle
-	if(NULL!=m_hWnd)
+	if(NULL!=m_hProgressWnd)
 	{
 		LOG("Warning: Dialog was already created.\n");
 		return ERR_CREATE_DLG;
@@ -218,33 +218,34 @@ int CreateProgressDialog()
 int DestroyProgressDialog()
 {
 	int iCount = 0;
-
+	DWORD dwError;
+	
 	LOG("DestroyProgressDialog(): ");
 	
 	// check handle
-	if(NULL==m_hWnd)
+	if(NULL==m_hProgressWnd)
 	{
-		LOG("Warning: m_hWnd==NULL\n");
+		LOG("Warning: m_hProgressWnd==NULL\n");
 		return ERR_OK;
 	}
 	
 	// post message to thread
-	if(0==PostMessage(m_hWnd, WM_USER+1, 0, 0))
+	if(0==PostMessage(m_hProgressWnd, WM_USER+1, 0, 0))
 	{
-		DWORD dwError = GetLastError();
+		dwError = GetLastError();
 		LOG("SendMessage() failed: "); LOG_ERR(dwError);
 	}
 	
 	// wait for thread to end
-	while((FALSE==m_bDone)&&(iCount<5))
+	while((FALSE==m_bProgressDone)&&(iCount<5))
 	{
 		Sleep(100);
 		iCount++;
 	}
 	
-	m_hWnd = NULL;
+	m_hProgressWnd = NULL;
 	
-	if(FALSE==m_bDone)
+	if(FALSE==m_bProgressDone)
 	{
 		LOG("failed (timeout).\n");
 		return ERR_DESTROY_DLG;

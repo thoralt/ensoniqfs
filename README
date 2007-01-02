@@ -117,6 +117,9 @@ file "fsplugin.ini". Open it and remove the image file you want to unmount
 from the section "[EnsoniqFS]". Then re-mount all drives by going back to the
 "Network neighbourhood/Ensoniq filesystems" folder.
 
+Note: Having many images mounted can be a real memory eater. For each image
+file a cache and lots of other data structures are created.
+
 4.1.3 Physical disks
 
 In this folder, all harddisks, floppy disks and other removable media which
