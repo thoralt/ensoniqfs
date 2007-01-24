@@ -47,23 +47,10 @@
 #define READ_AHEAD	256
 
 #define MAX_IMAGE_FILES		16
-//----------------------------------------------------------------------------
-// struct to contain an INI file
-//----------------------------------------------------------------------------
-typedef struct _INI_LINE
-{
-	char *cLine;
-	struct _INI_LINE *pPrevious, *pNext;
-} INI_LINE;
 
 //----------------------------------------------------------------------------
 // Prototypes
 //----------------------------------------------------------------------------
-int ReadIniFile(char *cFN, INI_LINE **pFirstLine);
-int WriteIniFile(char *cFN, INI_LINE *pFirstLine);
-INI_LINE* InsertIniLine(char *cLine, INI_LINE *pInsertAfter);
-void DeleteIniLine(INI_LINE *pDeleteLine);
-void FreeIniLines(INI_LINE *pFirstLine);
 BOOL UnlockMediaType(const char *szDrive, BOOL bLog);
 BOOL UnlockMediaType(const char *szDrive, BOOL bLog);
 BOOL LockMediaType(const char *szDrive, MEDIA_TYPE MediaType, BOOL bLog);

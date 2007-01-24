@@ -45,6 +45,7 @@
 #include "log.h"
 #include "fsplugin.h"
 #include "disk.h"
+#include "ini.h"
 #include "EnsoniqFS.h"
 #include "error.h"
 #include "cache.h"
@@ -730,6 +731,8 @@ DLLEXPORT int __stdcall FsExecuteFile(HWND MainWin, char* RemoteName,
 
 	return FS_EXEC_OK;
 	
+	// this is only a dummy statement to suppress the "unused variable"
+	// warning for MainWin
 	MainWin=MainWin;
 }
 
@@ -2193,8 +2196,8 @@ DLLEXPORT void __stdcall FsStatusInfo(char* RemoteDir, int InfoStartEnd,
 //----------------------------------------------------------------------------
 DLLEXPORT void __stdcall FsSetDefaultParams(FsDefaultParamStruct* dps)
 {
-	INI_LINE *pLine, *pIniFile;
-
+	char *cName, cValue[3];
+	
 	LOG("FsSetDefaultParams(): DefaultIniName=\"");
 	LOG(dps->DefaultIniName); LOG("\", PluginInterfaceVersionHi=");
 	LOG_INT(dps->PluginInterfaceVersionHi);
@@ -2204,70 +2207,21 @@ DLLEXPORT void __stdcall FsSetDefaultParams(FsDefaultParamStruct* dps)
 	
 	// save default param struct
 	memcpy(&g_DefaultParams, dps, sizeof(FsDefaultParamStruct));
+	cName = g_DefaultParams.DefaultIniName;
 
-	// read and parse INI file
-	LOG("Reading INI file: ");
-	if(ERR_OK!=ReadIniFile(g_DefaultParams.DefaultIniName, &pIniFile))
-	{
-		LOG("failed.\n");
-		return;
-	}
-	LOG("OK.\nParsing: ");
-
-	// try to find section header
-	pLine = pIniFile;
-	while(pLine)
-	{	
-		if(0==strncmp("[EnsoniqFS]", pLine->cLine, 11))
-		{
-			LOG("[EnsoniqFS] found.\n");
-			break;
-		}
-		pLine = pLine->pNext;
-	}
-
-	// section not found?
-	if(NULL==pLine)
-	{
-		LOG("[EnsoniqFS] section not found.\n");
-		FreeIniLines(pIniFile);
-		return;
-	}
-	
-	// skip [EnsoniqFS] section name
-	pLine = pLine->pNext;
-
-	// parse all lines after [EnsoniqFS]
-	while(pLine)
-	{
-		// next section found?
-		if('['==pLine->cLine[0]) break;
-		
-		if(0==strncmp("EnableFloppy=", pLine->cLine, 13))
-		{
-			g_iOptionEnableFloppy = pLine->cLine[13]-0x30;
-		}
-		else if(0==strncmp("EnableCDROM=", pLine->cLine, 12))
-		{
-			g_iOptionEnableCDROM = pLine->cLine[12]-0x30;
-		}
-		else if(0==strncmp("EnablePhysicalDisks=", pLine->cLine, 20))
-		{
-			g_iOptionEnablePhysicalDisks = pLine->cLine[20]-0x30;
-		}
-		else if(0==strncmp("EnableImages=", pLine->cLine, 13))
-		{
-			g_iOptionEnableImages = pLine->cLine[13]-0x30;
-		}
-		else if(0==strncmp("AutomaticRescan=", pLine->cLine, 16))
-		{
-			g_iOptionAutomaticRescan = pLine->cLine[16]-0x30;
-		}
-		
-		pLine = pLine->pNext;
-	}
-	
-	FreeIniLines(pIniFile);
+	// parse INI file
+	GetIniValue(cName, "[EnsoniqFS]", "EnableFloppy", cValue, 2, "1");
+	g_iOptionEnableFloppy = (cValue[0]=='0')?0:1;
+	GetIniValue(cName, "[EnsoniqFS]", "EnableCDROM", cValue, 2, "1");
+	g_iOptionEnableCDROM = (cValue[0]=='0')?0:1;
+	GetIniValue(cName, "[EnsoniqFS]", "EnablePhysicalDisks", cValue, 2, "1");
+	g_iOptionEnablePhysicalDisks = (cValue[0]=='0')?0:1;
+	GetIniValue(cName, "[EnsoniqFS]", "EnablePhysicalDisks", cValue, 2, "1");
+	g_iOptionEnablePhysicalDisks = (cValue[0]=='0')?0:1;
+	GetIniValue(cName, "[EnsoniqFS]", "EnableImages", cValue, 2, "1");
+	g_iOptionEnableImages = (cValue[0]=='0')?0:1;
+	GetIniValue(cName, "[EnsoniqFS]", "AutomaticRescan", cValue, 2, "1");
+	g_iOptionAutomaticRescan = (cValue[0]=='0')?0:1;
 }
 
 //----------------------------------------------------------------------------
