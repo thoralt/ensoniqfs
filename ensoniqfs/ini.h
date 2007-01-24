@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------
 // EnsoniqFS plugin for TotalCommander
 //
-// ERROR CONSTANTS
+// DISK I/O FUNCTIONS header file
 //----------------------------------------------------------------------------
 //
 // (c) 2006 Thoralt Franz
@@ -32,36 +32,29 @@
 // Alternatively, download a copy of the license here:
 // http://www.gnu.org/licenses/gpl.txt
 //----------------------------------------------------------------------------
-#ifndef _ERROR_H_
-#define _ERROR_H_
-
+#ifndef _INI_H_
+#define _INI_H_
 
 //----------------------------------------------------------------------------
-// error codes
+// struct to contain an INI file
 //----------------------------------------------------------------------------
-#define ERR_OK				0	// no error
-#define ERR_SCAN			1	// error scanning for devices
-#define ERR_NOT_SUPPORTED	2	// this function or type is not supported
-#define ERR_MEM				3	// memory could not be allocated
-#define ERR_NOT_OPEN		4	// file or device is not open
-#define ERR_READ			5	// error during read
-#define ERR_SEEK			6	// error during seek
-#define ERR_OUT_OF_BOUNDS	7	// block number too big
-#define ERR_DISK_NOT_FOUND	8	// disk not found from path name
-#define ERR_PATH_NOT_FOUND	9	// directory path not found
-#define ERR_DIRLEVEL		10	// recursive directory more than 255 levels
-#define ERR_FAT				11	// error reading FAT entry
-#define ERR_WRITE			12	// error writing to file or disk (Ensoniq)
-#define ERR_ABORTED			13	// user wants to abort the current action
-#define ERR_LOCAL_WRITE		14	// error writing local file (Windows)
-#define ERR_LOCAL_READ		15	// error reading local file (Windows)
-#define ERR_NOT_IN_CACHE	16	// the requested block is not in the cache
-#define ERR_DISK_FULL		17	// the destination disk is full
-#define ERR_INVALID_PARENT_LINKS	18	// for ETools
-#define ERR_NOT_FOUND		19	// file or directory name not found
-#define ERR_CREATE_DLG		20	// error creating dialog
-#define ERR_DESTROY_DLG		21	// error destroying dialog
-#define ERR_SET_INI			22	// error setting INI value
-#define ERR_GET_INI			23	// error getting INI value
+typedef struct _INI_LINE
+{
+	char *cLine;
+	struct _INI_LINE *pPrevious, *pNext;
+} INI_LINE;
+
+//----------------------------------------------------------------------------
+// Prototypes
+//----------------------------------------------------------------------------
+int ReadIniFile(char *cFN, INI_LINE **pFirstLine);
+int WriteIniFile(char *cFN, INI_LINE *pFirstLine);
+INI_LINE* InsertIniLine(char *cLine, INI_LINE *pInsertAfter);
+void DeleteIniLine(INI_LINE *pDeleteLine);
+void FreeIniLines(INI_LINE *pFirstLine);
+int SetIniValue(char *cName, char *cSection, char *cKey, char *cValue);
+int SetIniValueInt(char *cName, char *cSection, char *cKey, int iValue);
+int GetIniValue(char *cName, char *cSection, char *cKey, char *cValue,
+	int iMaxLen, char *cDefault);
 
 #endif

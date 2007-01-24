@@ -42,11 +42,13 @@
 #include "error.h"
 #include "rsrc.h"
 #include "disk.h"
+#include "ini.h"
 
 //----------------------------------------------------------------------------
 // global flags and variables
 //----------------------------------------------------------------------------
 extern HINSTANCE g_hInst;
+extern DISK *g_pDiskListRoot;
 extern FsDefaultParamStruct g_DefaultParams;	// initialization parameters
 												// needed to find INI file
 // global options
@@ -56,74 +58,7 @@ extern int g_iOptionEnableImages;
 extern int g_iOptionEnablePhysicalDisks;
 extern int g_iOptionAutomaticRescan;
 
-int ParseIni(char *cBuf)
-{
-	INI_LINE *pLine, *pIniFile;
-	int i, j;
-	
-	// open ini file, parse, add image file entries to QueryList
-	LOG("Reading INI file: ");
-
-	if(ERR_OK!=ReadIniFile(g_DefaultParams.DefaultIniName, &pIniFile))
-	{
-		LOG("failed.\n");
-		return 0;
-	}
-	else
-	{
-		LOG("OK.\nParsing: ");
-
-		// try to find section header
-		pLine = pIniFile;
-		while(pLine)
-		{	
-			if(0==strncmp("[EnsoniqFS]", pLine->cLine, 11))
-			{
-				LOG("[EnsoniqFS] found.\n");
-				break;
-			}
-			pLine = pLine->pNext;
-		}
-	
-		// section not found?
-		if(NULL==pLine)
-		{
-			LOG("[EnsoniqFS] section not found.\n");
-			return 0;
-		}
-		else
-		{
-			// skip [EnsoniqFS] section name
-			pLine = pLine->pNext;
-
-			// parse all lines after [EnsoniqFS]
-			i = 0;
-			while(pLine)
-			{
-				// next section found?
-				if('['==pLine->cLine[0]) break;
-				
-				if(0==strncmp("image=", pLine->cLine, 6))
-				{
-					LOG("adding to list: "); LOG(pLine->cLine);
-					
-					// add image file name to string list
-					j=0;
-					while(pLine->cLine[j]>31) cBuf[i++] = pLine->cLine[j++];
-					cBuf[i++] = 0;
-				}
-				
-				pLine = pLine->pNext;
-			}
-		}
-	}
-	FreeIniLines(pIniFile);
-
-	// add final '\0' to end of string list
-	cBuf[i] = 0;
-	
-	return 1;
-}
+int m_iDeviceListChanged = 0;
 
 void OptionsDlg_OnCancel(HWND hWnd)
 {
@@ -133,12 +68,8 @@ void OptionsDlg_OnCancel(HWND hWnd)
 
 void OptionsDlg_OnOK(HWND hWnd)
 {
-	INI_LINE *pLine, *pLastLine=NULL, *pIniFile;
-	int iEnableFloppySaved=0, iEnableCDROMSaved=0, 
-		iEnablePhysicalDisksSaved=0, iEnableImagesSaved=0,
-		iAutomaticRescanSaved=0;
-	char cTemp[512];
-
+	char *cName = g_DefaultParams.DefaultIniName;
+	
 	LOG("OptionsDlg_OnOK()\n");
 	// save checkbox status
 	g_iOptionEnableFloppy =
@@ -157,49 +88,67 @@ void OptionsDlg_OnOK(HWND hWnd)
 		(SendMessage(GetDlgItem(hWnd, IDC_CHK_RESCAN),
 		(UINT)BM_GETCHECK, (WPARAM)0, (LPARAM)0)==BST_CHECKED)?1:0;
 
-	// read INI file, change values, write back INI file
-	
-	// open ini file, parse, add image file entries to QueryList
+	SetIniValueInt(cName, "[EnsoniqFS]", "EnableFloppy", 
+		g_iOptionEnableFloppy);
+
+	SetIniValueInt(cName, "[EnsoniqFS]", "EnableCDROM", 
+		g_iOptionEnableCDROM);
+
+	SetIniValueInt(cName, "[EnsoniqFS]", "EnablePhysicalDisks", 
+		g_iOptionEnablePhysicalDisks);
+
+	SetIniValueInt(cName, "[EnsoniqFS]", "EnableImages", 
+		g_iOptionEnableImages);
+
+	SetIniValueInt(cName, "[EnsoniqFS]", "AutomaticRescan", 
+		g_iOptionAutomaticRescan);
+
+	if(m_iDeviceListChanged)
+	{
+		// rescan device list	
+		FreeDiskList(1, g_pDiskListRoot);
+		g_pDiskListRoot = ScanDevices(0);
+	}
+
+	EndDialog(hWnd, IDOK);
+}
+
+void OptionsDlg_ParseImageFiles(HWND hWnd)
+{
+	INI_LINE *pLine, *pIniFile;
+	char *cLine;
+
+	// clear "File" ComboBox
+	SendMessage(GetDlgItem(hWnd, IDC_CBO_FILES), 
+		(UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
+
+	// open ini file, parse, add image file entries to List
 	LOG("Reading INI file: ");
+
 	if(ERR_OK!=ReadIniFile(g_DefaultParams.DefaultIniName, &pIniFile))
 	{
 		LOG("failed.\n");
-		EndDialog(hWnd, IDOK);
 		return;
 	}
-
 	LOG("OK.\nParsing: ");
 
 	// try to find section header
 	pLine = pIniFile;
-	pLastLine = pIniFile;
 	while(pLine)
 	{	
-		if(0==strncmp("[EnsoniqFS]", pLine->cLine, 11))
-		{
-			LOG("[EnsoniqFS] found.\n");
-			break;
-		}
-		pLastLine = pLine;
+		if(0==strncmp("[EnsoniqFS]", pLine->cLine, 11)) break;
 		pLine = pLine->pNext;
 	}
 
 	// section not found?
 	if(NULL==pLine)
 	{
-		LOG("[EnsoniqFS] section not found, creating a new one.\n");
-		pLine = InsertIniLine("[EnsoniqFS]", pLastLine);
-		
-		if(NULL==pLine)
-		{
-			FreeIniLines(pIniFile);
-			EndDialog(hWnd, IDOK);
-			return;
-		}
+		LOG("[EnsoniqFS] section not found.\n");
+		FreeIniLines(pIniFile);
+		return;
 	}
-	
+
 	// skip [EnsoniqFS] section name
-	pLastLine = pLine;
 	pLine = pLine->pNext;
 
 	// parse all lines after [EnsoniqFS]
@@ -208,137 +157,151 @@ void OptionsDlg_OnOK(HWND hWnd)
 		// next section found?
 		if('['==pLine->cLine[0]) break;
 		
-		if(0==strncmp("EnableFloppy=", pLine->cLine, 13))
+		if(0==strncmp("image=", pLine->cLine, 6))
 		{
-			free(pLine->cLine); 
-			sprintf(cTemp, "EnableFloppy=%i\n", g_iOptionEnableFloppy);
-			pLine->cLine = malloc(strlen(cTemp)+1); 
-			strcpy(pLine->cLine, cTemp);
-			iEnableFloppySaved=1;
-		}
-		else if(0==strncmp("EnableCDROM=", pLine->cLine, 12))
-		{
-			free(pLine->cLine); 
-			sprintf(cTemp, "EnableCDROM=%i\n", g_iOptionEnableCDROM);
-			pLine->cLine = malloc(strlen(cTemp)+1); 
-			strcpy(pLine->cLine, cTemp);
-			iEnableCDROMSaved=1;
-		}
-		else if(0==strncmp("EnablePhysicalDisks=", pLine->cLine, 20))
-		{
-			free(pLine->cLine); 
-			sprintf(cTemp, "EnablePhysicalDisks=%i\n", 
-				g_iOptionEnablePhysicalDisks);
-			pLine->cLine = malloc(strlen(cTemp)+1); 
-			strcpy(pLine->cLine, cTemp);
-			iEnablePhysicalDisksSaved=1;
-		}
-		else if(0==strncmp("EnableImages=", pLine->cLine, 13))
-		{
-			free(pLine->cLine); 
-			sprintf(cTemp, "EnableImages=%i\n", g_iOptionEnableImages);
-			pLine->cLine = malloc(strlen(cTemp)+1); 
-			strcpy(pLine->cLine, cTemp);
-			iEnableImagesSaved=1;
-		}
-		else if(0==strncmp("AutomaticRescan=", pLine->cLine, 16))
-		{
-			free(pLine->cLine); 
-			sprintf(cTemp, "AutomaticRescan=%i\n", 
-				g_iOptionAutomaticRescan);
-			pLine->cLine = malloc(strlen(cTemp)+1); 
-			strcpy(pLine->cLine, cTemp);
-			iAutomaticRescanSaved=1;
+			LOG("adding to list: "); LOG(pLine->cLine);
+			cLine = malloc(strlen(pLine->cLine)-5);
+			if(NULL==cLine)
+			{
+				LOG("Error allocating line buffer.\n"); LOG(pLine->cLine);
+				FreeIniLines(pIniFile);
+				return;
+			}
+			memset(cLine, 0, strlen(pLine->cLine)-5);
+			strncpy(cLine, pLine->cLine+6, strlen(pLine->cLine)-7);
+			SendMessage(GetDlgItem(hWnd, IDC_CBO_FILES), 
+				(UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)cLine);
+			free(cLine);
 		}
 		
 		pLine = pLine->pNext;
 	}
+
+	// select first entry
+	SendMessage(GetDlgItem(hWnd, IDC_CBO_FILES), 
+		(UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+
+	FreeIniLines(pIniFile);
+}
+
+void OptionsDlg_UnmountImage(HWND hWnd)
+{
+	INI_LINE *pLine, *pIniFile;
+	int iLen, iSelectedItem;
+	LRESULT lResult;
+	char *cName;
 	
-	// if we come to here, pLastLine points either to "[EnsoniqFS]"
-	// or the last member of the "[EnsoniqFS]" group
-	// so we could add other values here if necessary
-	if(!iEnableFloppySaved)
+	// get selected entry
+	lResult = SendMessage(GetDlgItem(hWnd, IDC_CBO_FILES), 
+		(UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
+	iSelectedItem = lResult;
+	if(CB_ERR==lResult)
 	{
-		sprintf(cTemp, "EnableFloppy=%i\n", g_iOptionEnableFloppy);
-		InsertIniLine(cTemp, pLastLine);
-	}
-	if(!iEnableCDROMSaved)
-	{
-		sprintf(cTemp, "EnableCDROM=%i\n", g_iOptionEnableCDROM);
-		InsertIniLine(cTemp, pLastLine);
-	}
-	if(!iEnablePhysicalDisksSaved)
-	{
-		sprintf(cTemp, "EnablePhysicalDisks=%i\n", 
-			g_iOptionEnablePhysicalDisks);
-		InsertIniLine(cTemp, pLastLine);
-	}
-	if(!iEnableImagesSaved)
-	{
-		sprintf(cTemp, "EnableImages=%i\n", g_iOptionEnableImages);
-		InsertIniLine(cTemp, pLastLine);
-	}
-	if(!iAutomaticRescanSaved)
-	{
-		sprintf(cTemp, "AutomaticRescan=%i\n", g_iOptionAutomaticRescan);
-		InsertIniLine(cTemp, pLastLine);
+		MessageBoxA(0, "Please select an image file first.", 
+			"EnsoniqFS · Warning", MB_OK|MB_ICONEXCLAMATION);
+		return;
 	}
 
-	LOG("Writing INI file.\n");
+	// get text length
+	lResult = SendMessage(GetDlgItem(hWnd, IDC_CBO_FILES), 
+		(UINT)CB_GETLBTEXTLEN, (WPARAM)iSelectedItem, (LPARAM)0);
+	iLen = lResult + 7;
+	cName = malloc(iLen);
+	if(NULL==cName) return;
+	
+	// get selected text
+	memset(cName, 0, iLen);
+	strcpy(cName, "image=");
+	lResult = SendMessage(GetDlgItem(hWnd, IDC_CBO_FILES), 
+		(UINT)CB_GETLBTEXT, (WPARAM)iSelectedItem, (LPARAM)cName+6);
+	
+	LOG("Unmounting image \""); LOG(cName); LOG("\"\n");
+	
+	// open ini file, parse, remove image file from list
+	LOG("Reading INI file: ");
+
+	if(ERR_OK!=ReadIniFile(g_DefaultParams.DefaultIniName, &pIniFile))
+	{
+		LOG("failed.\n");
+		return;
+	}
+	LOG("OK.\nParsing: ");
+
+	// try to find section header
+	pLine = pIniFile;
+	while(pLine)
+	{	
+		if(0==strncmp("[EnsoniqFS]", pLine->cLine, 11)) break;
+		pLine = pLine->pNext;
+	}
+
+	// section not found?
+	if(NULL==pLine)
+	{
+		LOG("[EnsoniqFS] section not found.\n");
+		free(cName);
+		FreeIniLines(pIniFile);
+		return;
+	}
+
+	// skip [EnsoniqFS] section name
+	pLine = pLine->pNext;
+
+	// parse all lines after [EnsoniqFS]
+	while(pLine)
+	{
+		// next section found?
+		if('['==pLine->cLine[0]) break;
+		
+		if(0==strncmp(cName, pLine->cLine, strlen(cName)))
+		{
+			DeleteIniLine(pLine);
+			break;
+		}
+		
+		pLine = pLine->pNext;
+	}
+
+	// write back INI file
 	WriteIniFile(g_DefaultParams.DefaultIniName, pIniFile);
 	FreeIniLines(pIniFile);
-	EndDialog(hWnd, IDOK);
+	free(cName);
+	
+	// reload image list
+	OptionsDlg_ParseImageFiles(hWnd);
+	m_iDeviceListChanged = 1;
+	
 }
 
 void OptionsDlg_OnInitDialog(HWND hWnd)
 {
-	char cBuf[65536];
-	int i;
-	
 	LOG("OptionsDlg_OnInitDialog()\n");
 
-	// read and parse ini file for mounted image files		
-	if(ParseIni(cBuf))
-	{
-		// clear "File" ComboBox
-		SendMessage(GetDlgItem(hWnd, IDC_CBO_FILES), 
-			(UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
-
-		// add all entries to ComboBox				
-		i = 0;
-		while(cBuf[i])
-		{
-			SendMessage(GetDlgItem(hWnd, IDC_CBO_FILES), 
-				(UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)cBuf+i+6);
-			i += strlen(cBuf+i) + 1;
-		}
-
-		// select first entry
-		SendMessage(GetDlgItem(hWnd, IDC_CBO_FILES), 
-			(UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+	// read and parse ini file for mounted image files
+	OptionsDlg_ParseImageFiles(hWnd);
+	m_iDeviceListChanged = 0;
 			
-		// set checkboxes
-		SendMessage(GetDlgItem(hWnd, IDC_CHK_FLOPPY),
-			(UINT)BM_SETCHECK, 
-			(WPARAM)(g_iOptionEnableFloppy?BST_CHECKED:BST_UNCHECKED), 
-			(LPARAM)0);
-		SendMessage(GetDlgItem(hWnd, IDC_CHK_CDROM),
-			(UINT)BM_SETCHECK, 
-			(WPARAM)(g_iOptionEnableCDROM?BST_CHECKED:BST_UNCHECKED), 
-			(LPARAM)0);
-		SendMessage(GetDlgItem(hWnd, IDC_CHK_PHYSICAL),
-			(UINT)BM_SETCHECK, 
-			(WPARAM)(g_iOptionEnablePhysicalDisks?BST_CHECKED:BST_UNCHECKED), 
-			(LPARAM)0);
-		SendMessage(GetDlgItem(hWnd, IDC_CHK_IMAGE),
-			(UINT)BM_SETCHECK, 
-			(WPARAM)(g_iOptionEnableImages?BST_CHECKED:BST_UNCHECKED), 
-			(LPARAM)0);
-		SendMessage(GetDlgItem(hWnd, IDC_CHK_RESCAN),
-			(UINT)BM_SETCHECK, 
-			(WPARAM)(g_iOptionAutomaticRescan?BST_CHECKED:BST_UNCHECKED), 
-			(LPARAM)0);
-	}
+	// set checkboxes
+	SendMessage(GetDlgItem(hWnd, IDC_CHK_FLOPPY),
+		(UINT)BM_SETCHECK, 
+		(WPARAM)(g_iOptionEnableFloppy?BST_CHECKED:BST_UNCHECKED), 
+		(LPARAM)0);
+	SendMessage(GetDlgItem(hWnd, IDC_CHK_CDROM),
+		(UINT)BM_SETCHECK, 
+		(WPARAM)(g_iOptionEnableCDROM?BST_CHECKED:BST_UNCHECKED), 
+		(LPARAM)0);
+	SendMessage(GetDlgItem(hWnd, IDC_CHK_PHYSICAL),
+		(UINT)BM_SETCHECK, 
+		(WPARAM)(g_iOptionEnablePhysicalDisks?BST_CHECKED:BST_UNCHECKED), 
+		(LPARAM)0);
+	SendMessage(GetDlgItem(hWnd, IDC_CHK_IMAGE),
+		(UINT)BM_SETCHECK, 
+		(WPARAM)(g_iOptionEnableImages?BST_CHECKED:BST_UNCHECKED), 
+		(LPARAM)0);
+	SendMessage(GetDlgItem(hWnd, IDC_CHK_RESCAN),
+		(UINT)BM_SETCHECK, 
+		(WPARAM)(g_iOptionAutomaticRescan?BST_CHECKED:BST_UNCHECKED), 
+		(LPARAM)0);
 }
 
 INT_PTR CALLBACK OptionsDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam,
@@ -363,7 +326,7 @@ INT_PTR CALLBACK OptionsDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam,
 			switch(wParam)
 			{
 				case IDC_BTN_UNMOUNT:
-					MessageBoxA(0, "IDC_BTN_UNMOUNT", "", 0);
+					OptionsDlg_UnmountImage(hwndDlg);
 					iRetVal = TRUE;
 					break;
 
