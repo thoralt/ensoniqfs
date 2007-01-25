@@ -6,7 +6,9 @@ README
 2 Where to get it
 3 Installation
 4 Using EnsoniqFS
-5 License
+5 Bugs
+6 License
+7 Disclaimer
 
 1 What is EnsoniqFS?
 --------------------
@@ -28,17 +30,14 @@ Once mounted, on a file system you can do the following with Total Commander:
 
 With the above, you get a complete file manager for Ensoniq disks.
 
-This documentation needs to be extended. This will be done in the next time
-in parallel with the development of EnsoniqFS.
-
 2 Where to get it
 -----------------
 
-All the Ensoniq related stuff is located on SourceForge:
+All the project related stuff is located at SourceForge:
 
 http://sourceforge.net/projects/ensoniqfs/
 
-Here you can download EnsoniqFS as and other related tools. If you're
+Here you can download EnsoniqFS and related tools. If you're
 interested, you can check out the source codes as well.
 
 3 Installation
@@ -48,27 +47,29 @@ interested, you can check out the source codes as well.
 
 To use EnsoniqFS, you first need to have Total Commander installed. Download
 your copy from http://www.ghisler.com. Installation is straightforward, there
-shouldn't be any problems.
+shouldn't be any problems. Be sure to get the latest version (6.5 minimum).
 
-Then, run the installer for EnsoniqFS. Every file will be copied to its
-location, the INI file of Total Commander will be modified. You will have to
-restart Total Commander after installation to gain access to the plugin.
+Then, run the installer for EnsoniqFS (which you should have downloaded from
+SourceForge). Every file will be copied to its location, the INI file of
+Total Commander will be modified. You will have to restart Total Commander 
+after installation to gain access to the plugin.
 
 3.2 OmniFlop driver
 
 To be able to access Ensoniq formatted floppy disks you need to have a special
 disk driver. If you do not plan using floppies, then you can leave out this
-step.
+step. The EnsoniqFS plugin will also work without this driver (you're then
+limited to the usage of image files and SCSI disks).
 
-First, get the latest version of the driver from here (be sure you get the
-latest version, 2.01k minimum):
+First, get the driver from here (be sure you get the latest version, 2.01k 
+minimum):
 http://www.shlock.co.uk/Utils/OmniFlop/OmniFlop.htm
 
 The driver package comes with detailed installation instructions. Be sure to
 read them and follow them closely.
 
-Now you're just one step far from being able to use the driver. You need to
-a license to use it with EnsoniqFS. Don't be afraid - the license is free and
+Now you're just one step far from being able to use the driver. You need a
+license to use it with EnsoniqFS. Don't be afraid - the license is free and
 it is available via instant online registration. Here's how you get the
 license:
 	
@@ -98,33 +99,78 @@ all your drives. This may take a few seconds (a progress dialog will be shown).
 After that, you'll see three folders: "CDROMs", "Image files" and "Physical
 disks".
 
+Along with that, you should see an entry "Options" and "Rescan devices" (see
+below for an explanation).
+
 4.1.1 CDROMs
 
-If you insert an Ensoniq formatted CDROM into any of your CDROM drive or if you
-use an appropriate image file together with a CDROM emulation driver, you will
-see that CDROMs inside the CDROM folder. You can than browse them as usual.
+If you insert an Ensoniq formatted CDROM into any of your CDROM drives or if
+you use an appropriate image file together with a CDROM emulation driver, you
+will see these CDROMs inside the CDROM folder. You can than browse them the
+same way as you do with Windows files and folders.
 
 4.1.2 Image files
 
 Initially, the image folder is empty. To add a new image file, go to the other
 tab of Total Commander and browse to an ISO image file you want to mount. Press
 <F5> to copy it to the image file folder. It will be mounted and you can browse
-it.
-
-Removing image files from the list is a bit unconvenient at the moment (will
-be improved soon): Navigate to your Windows installation folder and open the
-file "fsplugin.ini". Open it and remove the image file you want to unmount
-from the section "[EnsoniqFS]". Then re-mount all drives by going back to the
-"Network neighbourhood/Ensoniq filesystems" folder.
+it. Another way of adding (and removing) image files is through the "Options"
+dialog, see 4.1.4.
 
 Note: Having many images mounted can be a real memory eater. For each image
-file a cache and lots of other data structures are created.
+file a cache and lots of other data structures are created. So be sure to
+unmount unused image files.
 
 4.1.3 Physical disks
 
 In this folder, all harddisks, floppy disks and other removable media which
 was found during the detection process will be shown. Enter the devices to
 browse them.
+
+4.1.4 Options
+
+If you hit "Enter" on the "Options" entry (or if you double click it), an
+options dialog is shown. Here you can modify EnsoniqFS's behaviour.
+
+[ ] Enable floppy disk access
+Activate this checkbox to allow EnsoniqFS to use your floppy disk drives.
+
+[ ] Enable CDROM access
+Activate this checkbox to allow EnsoniqFS to use your CDROM drives.
+
+[ ] Enable removable/fixed disk access
+Activate this checkbox to allow EnsoniqFS to use your SCSI and IDE harddisks 
+and removable disks (e. g. ZIP drives should show up there). 
+
+[ ] Enable image file support
+Activate this checkbox to allow EnsoniqFS to use image files. 
+
+If you uncheck any of the above options, EnsoniqFS doesn't scan the associated
+drives or files. This can speed up the detection process.
+
+[ ] Re-scan device list everytime the \\\Ensoniq filesystems folder is entered
+Normally, EnsoniqFS updates the device list every time you enter the "Root"
+directory of EnsoniqFS. This causes a delay, a progress dialog will be shown.
+If you do not want EnsoniqFS to rescan that often, you should disable this
+checkbox. You can update the device list manually (see below).
+
+Mounting/unmounting image files
+
+If you select an image file from the dropdown box at the bottom of the options
+dialog, you can click on the "Unmount selected image" button to remove that
+image file from the list. The "Mount new image..." function is not yet imple-
+mented at this place (read 4.1.2 for how to mount image files). This will be
+changed soon.
+
+4.1.5 Rescan devices
+
+In case you disabled the automatic device detection, you can issue a new
+detection by hitting "Enter" on "Rescan devices" (or by double clicking it).
+EnsoniqFS will then scan all available devices for EnsoniqMedia.
+
+You should do this if either your configuration changed (maybe you plugged in
+another SCSI disk or ZIP drive) or if you inserted new removable media into
+one of your devices.
 
 4.2 ETools
 
@@ -138,6 +184,12 @@ ETools is a piece of software which can do the following things for you:
   
 To operate on a drive, first select it from the dropdown list on top of the
 application. Then choose either to backup, restore, check or format this drive.
+
+For backup, at the moment two methods are supported: Full backup and partition
+backup (the third option, file backup, is not implemented yet). If you choose
+partition backup, only the space which is allocated by the Ensoniq file system
+will be written to an ISO file. This could be useful if you formatted a big
+drive to a lower capacity and don't want to have a huge full drive backup.
 
 5 Bugs
 
