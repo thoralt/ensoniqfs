@@ -40,7 +40,7 @@ BEGIN
   CONTROL "Re-scan device list everytime the \\\\\\Ensoniq filesystems folder is entered",IDC_CHK_RESCAN,"Button",0x50012003,13,73,187,19
   CONTROL "",IDC_CBO_FILES,"ComboBox",0x50010203,13,116,194,12
   CONTROL "&Unmount selected image",IDC_BTN_UNMOUNT,"Button",0x50010000,13,135,94,12
-  CONTROL "&Mount new image...",IDC_BTN_MOUNT,"Button",0x58010000,113,135,94,12
+  CONTROL "&Mount new image...",IDC_BTN_MOUNT,"Button",0x50010000,113,135,94,12
   CONTROL "Image files",IDC_GRP3,"Button",0x50000007,6,104,207,49
   CONTROL "Options",IDC_GRP4,"Button",0x50000007,6,6,207,92
 END

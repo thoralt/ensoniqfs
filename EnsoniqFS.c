@@ -1303,6 +1303,128 @@ int CopyEnsoniqFile(DISK *pDestDisk, int iMode, FILE *f, DISK *pSourceDisk,
 	return ERR_OK;
 }
 
+
+//----------------------------------------------------------------------------
+// AddToImageList
+//
+// Adds a new image file to the image file list (stored in INI)
+//
+// -> cName = file name to be added
+// <- --
+//----------------------------------------------------------------------------
+void AddToImageList(char *cName)
+{
+	INI_LINE *pIniFile = 0, *pLine, *pTempLine = 0;
+	int iImageFileCounter = 0;
+	char cText[512];
+	
+/*
+	// check if this is a supported image file format
+	iFormat = CheckImageFile(f);
+	if(IMAGE_FILE_UNKNOWN==iFormat)
+	{
+		MessageBoxA(0, "The format of the image file could not be "
+			"determined. Only the \n"
+			"following types are supported:\n\n"
+			"    · ISO format (plain disk image)\n"
+			"    · CDROM Mode1 format\n"
+			"    · GKH format\n"
+			"    · Giebler disk image (EDE, EDA, EDT)\n\n"
+			"Additionally, the image file must contain a valid Ensoniq "
+			"file\nsystem for EnsoniqFS to be able to mount it.",
+			"EnsoniqFS · Warning", MB_ICONWARNING);
+		fclose(f);
+		return FS_FILE_OK;
+	}
+*/
+	// open ini file, parse, write new entry, rescan devices
+	LOG("Reading INI file: ");
+	if(ERR_OK!=ReadIniFile(g_DefaultParams.DefaultIniName, &pIniFile))
+	{
+		LOG("failed.\n");
+	}
+	else
+	{
+		LOG("OK.\n");
+	}
+	LOG("Parsing...\n");
+	
+	// try to find section header
+	pLine = pIniFile;
+	while(pLine)
+	{	
+		pTempLine = pLine;
+
+		if(0==strncmp("[EnsoniqFS]", pLine->cLine, 11))
+		{
+			LOG("[EnsoniqFS] found.\n");
+			break;
+		}
+		pLine = pLine->pNext;
+	}
+
+	sprintf(cText, "image=%s\n", cName);
+
+	// section not found?
+	if(NULL==pLine)
+	{
+		LOG("[EnsoniqFS] section not found. Creating a new one.\n");
+		pLine = InsertIniLine("[EnsoniqFS]\n", pTempLine);
+		
+		// is this the first line in the file (was the file empty before)?
+		if(NULL==pIniFile) pIniFile = pLine;
+		
+		pLine = InsertIniLine(cText, pLine);
+	}
+	else
+	{
+		// skip [EnsoniqFS] section name
+		pLine = pTempLine->pNext;
+
+		// parse all lines after [EnsoniqFS], search for current file
+		while(pLine)
+		{
+			// next section found?
+			if('['==pLine->cLine[0]) break;
+		
+			iImageFileCounter++;	
+			if(0==strcmp(pLine->cLine, cText))
+			{
+				MessageBoxA(0, "This file is already in the list of image "
+					"files.\nIt can not be mounted twice.",
+					"EnsoniqFS · Warning", MB_ICONWARNING);
+				pTempLine = NULL;
+				break;
+			}
+			
+			pLine = pLine->pNext;
+		}
+		
+		// check counter
+		if(iImageFileCounter>MAX_IMAGE_FILES)
+		{
+			MessageBoxA(0, "The maximum mounted image count has been "
+				"reached.\n"
+				"Please delete at least one image before adding new ones.",
+				"EnsoniqFS · Warning", MB_ICONWARNING);
+			pTempLine = NULL;
+		}
+		
+		if(NULL!=pTempLine) InsertIniLine(cText, pTempLine);
+	}
+	
+	LOG("Writing INI file: ");
+	if(ERR_OK!=WriteIniFile(g_DefaultParams.DefaultIniName, pIniFile))
+	{
+		LOG("failed.\n");
+	}
+	else
+	{
+		LOG("OK.\n");
+	}
+	FreeIniLines(pIniFile);
+}
+
 //----------------------------------------------------------------------------
 // FsPutFile
 //
@@ -1313,8 +1435,7 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 	unsigned char ucBuf[512], ucType, *ucCurrentDir;
 	DWORD dwFilesize, dwStart, dwContiguous;
 	char cName[17], cName2[13], cText[512];
-	int iResult, i, j, iEntry, iImageFileCounter = 0;
-	INI_LINE *pIniFile = 0, *pLine, *pTempLine = 0;
+	int iResult, i, j, iEntry;
 	FIND_HANDLE Handle;
 	FILE *f;
 
@@ -1366,111 +1487,8 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 			fclose(f);
 			return FS_FILE_OK;
 		}
-/*
-		// check if this is a supported image file format
-		iFormat = CheckImageFile(f);
-		if(IMAGE_FILE_UNKNOWN==iFormat)
-		{
-			MessageBoxA(0, "The format of the image file could not be "
-				"determined. Only the \n"
-				"following types are supported:\n\n"
-				"    · ISO format (plain disk image)\n"
-				"    · CDROM Mode1 format\n"
-				"    · GKH format\n"
-				"    · Giebler disk image (EDE, EDA, EDT)\n\n"
-				"Additionally, the image file must contain a valid Ensoniq "
-				"file\nsystem for EnsoniqFS to be able to mount it.",
-				"EnsoniqFS · Warning", MB_ICONWARNING);
-			fclose(f);
-			return FS_FILE_OK;
-		}
-*/
-		// open ini file, parse, write new entry, rescan devices
-		LOG("Reading INI file: ");
-		if(ERR_OK!=ReadIniFile(g_DefaultParams.DefaultIniName, &pIniFile))
-		{
-			LOG("failed.\n");
-		}
-		else
-		{
-			LOG("OK.\n");
-		}
-		LOG("Parsing...\n");
-		
-		// try to find section header
-		pLine = pIniFile;
-		while(pLine)
-		{	
-			pTempLine = pLine;
 
-			if(0==strncmp("[EnsoniqFS]", pLine->cLine, 11))
-			{
-				LOG("[EnsoniqFS] found.\n");
-				break;
-			}
-			pLine = pLine->pNext;
-		}
-
-		sprintf(cText, "image=%s\n", LocalName);
-
-		// section not found?
-		if(NULL==pLine)
-		{
-			LOG("[EnsoniqFS] section not found. Creating a new one.\n");
-			pLine = InsertIniLine("[EnsoniqFS]\n", pTempLine);
-			
-			// is this the first line in the file (was the file empty before)?
-			if(NULL==pIniFile) pIniFile = pLine;
-			
-			pLine = InsertIniLine(cText, pLine);
-		}
-		else
-		{
-			// skip [EnsoniqFS] section name
-			pLine = pTempLine->pNext;
-
-			// parse all lines after [EnsoniqFS], search for current file
-			while(pLine)
-			{
-				// next section found?
-				if('['==pLine->cLine[0]) break;
-			
-				iImageFileCounter++;	
-				if(0==strcmp(pLine->cLine, cText))
-				{
-					MessageBoxA(0, "This file is already in the list of image "
-						"files.\nIt can not be mounted twice.",
-						"EnsoniqFS · Warning", MB_ICONWARNING);
-					pTempLine = NULL;
-					break;
-				}
-				
-				pLine = pLine->pNext;
-			}
-			
-			// check counter
-			if(iImageFileCounter>MAX_IMAGE_FILES)
-			{
-				MessageBoxA(0, "The maximum mounted image count has been "
-					"reached.\n"
-					"Please delete at least one image before adding new ones.",
-					"EnsoniqFS · Warning", MB_ICONWARNING);
-				pTempLine = NULL;
-			}
-			
-			if(NULL!=pTempLine) InsertIniLine(cText, pTempLine);
-		}
-		
-		LOG("Writing INI file: ");
-		if(ERR_OK!=WriteIniFile(g_DefaultParams.DefaultIniName, pIniFile))
-		{
-			LOG("failed.\n");
-		}
-		else
-		{
-			LOG("OK.\n");
-		}
-		FreeIniLines(pIniFile);
+		AddToImageList(LocalName);
 		
 		// notify TotalCmd of progress
 		if(1==g_pProgressProc(g_iPluginNr, LocalName, RemoteName, 100))
