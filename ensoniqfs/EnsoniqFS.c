@@ -719,7 +719,7 @@ DLLEXPORT int __stdcall FsExecuteFile(HWND MainWin, char* RemoteName,
 
 	if((0==strcmp(RemoteName, "\\Options"))&&(0==strcmp(Verb, "open")))
 	{
-		CreateOptionsDialogModal();
+		CreateOptionsDialogModal(MainWin);
 	}
 	
 	if((0==strcmp(RemoteName, "\\Rescan devices"))&&(0==strcmp(Verb, "open")))
@@ -728,12 +728,7 @@ DLLEXPORT int __stdcall FsExecuteFile(HWND MainWin, char* RemoteName,
 		g_pDiskListRoot = ScanDevices(0);
 	}
 
-
 	return FS_EXEC_OK;
-	
-	// this is only a dummy statement to suppress the "unused variable"
-	// warning for MainWin
-	MainWin=MainWin;
 }
 
 

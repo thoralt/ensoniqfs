@@ -365,7 +365,7 @@ INT_PTR CALLBACK OptionsDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam,
 // <- ERR_OK
 //    ERR_CREATE_DLG
 //----------------------------------------------------------------------------
-int CreateOptionsDialogModal()
+int CreateOptionsDialogModal(HWND hParent)
 {
 	int iResult;
 	LOG("CreateOptionsDialog(): ");
@@ -374,7 +374,7 @@ int CreateOptionsDialogModal()
 	HRSRC hrsrc = FindResource(g_hInst, MAKEINTRESOURCE(IDD_DLG_OPTIONS), 
 		RT_DIALOG);
 	HGLOBAL hglobal = LoadResource(g_hInst, hrsrc);
-	iResult = DialogBoxIndirectParam(g_hInst, (LPCDLGTEMPLATE)hglobal, 0, 
+	iResult = DialogBoxIndirectParam(g_hInst, (LPCDLGTEMPLATE)hglobal, hParent, 
 		OptionsDlgProc, 0);	
 		
 	if(0==iResult)

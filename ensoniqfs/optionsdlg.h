@@ -38,6 +38,6 @@
 //----------------------------------------------------------------------------
 // Prototypes
 //----------------------------------------------------------------------------
-int CreateOptionsDialogModal();
+int CreateOptionsDialogModal(HWND hParent);
 
 #endif
