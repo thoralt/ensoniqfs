@@ -163,9 +163,8 @@ Mounting/unmounting image files
 
 If you select an image file from the dropdown box at the bottom of the options
 dialog, you can click on the "Unmount selected image" button to remove that
-image file from the list. The "Mount new image..." function is not yet imple-
-mented at this place (read 4.1.2 for how to mount image files). This will be
-changed soon.
+image file from the list. With "Mount new image..." you can mount new image
+files.
 
 4.1.5 Rescan devices
 

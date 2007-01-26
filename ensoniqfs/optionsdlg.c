@@ -43,12 +43,14 @@
 #include "rsrc.h"
 #include "disk.h"
 #include "ini.h"
+#include "EnsoniqFS.h"
 
 //----------------------------------------------------------------------------
 // global flags and variables
 //----------------------------------------------------------------------------
 extern HINSTANCE g_hInst;
 extern DISK *g_pDiskListRoot;
+extern HINSTANCE g_hInst;
 extern FsDefaultParamStruct g_DefaultParams;	// initialization parameters
 												// needed to find INI file
 // global options
@@ -208,6 +210,44 @@ void OptionsDlg_ParseImageFiles(HWND hWnd)
 		(UINT)CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 
 	FreeIniLines(pIniFile);
+}
+//----------------------------------------------------------------------------
+// OptionsDlg_MountImage
+// 
+// Adds a new file to the image file list
+//
+// -> hWnd = window handle of options dialog
+// <- --
+//----------------------------------------------------------------------------
+void OptionsDlg_MountImage(HWND hWnd)
+{
+	char cFilter[] = "Supported image files (*.iso;*.bin)|*.iso;*.bin|"
+		"All files (*.*)|*.*||",
+		cFN[512], cTitle[] = "Open image file";
+	OPENFILENAME ofn;
+	int i, iLen;
+	
+	// replace the separators with zeroes
+	iLen = strlen(cFilter);
+	for(i=0; i<iLen; i++) if('|'==cFilter[i]) cFilter[i] = 0;
+	memset(cFN, 0, 512); memset(&ofn, 0, sizeof(OPENFILENAME));
+
+	// construct the open file dialog
+	ofn.lStructSize = sizeof(OPENFILENAME);
+	ofn.hwndOwner = hWnd;
+	ofn.hInstance = g_hInst;
+	ofn.lpstrFilter = cFilter;
+	ofn.nFilterIndex = 1;
+	ofn.lpstrFile = cFN;
+	ofn.nMaxFile = 512;
+	ofn.lpstrTitle = cTitle;
+	ofn.Flags = OFN_ENABLESIZING|OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST|
+		OFN_HIDEREADONLY;
+	if(GetOpenFileName(&ofn))
+	{
+		AddToImageList(ofn.lpstrFile);
+		m_iDeviceListChanged = 1;
+	}
 }
 
 //----------------------------------------------------------------------------
@@ -382,7 +422,7 @@ INT_PTR CALLBACK OptionsDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam,
 					break;
 
 				case IDC_BTN_MOUNT:
-					MessageBoxA(0, "IDC_BTN_MOUNT", "", 0);
+					OptionsDlg_MountImage(hwndDlg);
 					iRetVal = TRUE;
 					break;
 
