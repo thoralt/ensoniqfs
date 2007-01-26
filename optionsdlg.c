@@ -60,12 +60,30 @@ extern int g_iOptionAutomaticRescan;
 
 int m_iDeviceListChanged = 0;
 
+//----------------------------------------------------------------------------
+// OptionsDlg_OnCancel
+// 
+// Gets called when the Cancel button was clicked, ends the dialog handling
+//
+// -> hWnd = window handle of options dialog
+// <- --
+//----------------------------------------------------------------------------
 void OptionsDlg_OnCancel(HWND hWnd)
 {
 	LOG("OptionsDlg_OnCancel()\n");
 	EndDialog(hWnd, IDCANCEL);
 }
 
+//----------------------------------------------------------------------------
+// OptionsDlg_OnOK
+// 
+// Gets called when the OK button was clicked
+// Saves the status of the checkboxes to the global variables, writes them
+// to the INI file, rescans device list if necessary
+//
+// -> hWnd = window handle of options dialog
+// <- --
+//----------------------------------------------------------------------------
 void OptionsDlg_OnOK(HWND hWnd)
 {
 	char *cName = g_DefaultParams.DefaultIniName;
@@ -113,6 +131,14 @@ void OptionsDlg_OnOK(HWND hWnd)
 	EndDialog(hWnd, IDOK);
 }
 
+//----------------------------------------------------------------------------
+// OptionsDlg_ParseImageFiles
+// 
+// Reads the INI file, parses for image files, adds all entries to ComboBox
+//
+// -> hWnd = window handle of options dialog
+// <- --
+//----------------------------------------------------------------------------
 void OptionsDlg_ParseImageFiles(HWND hWnd)
 {
 	INI_LINE *pLine, *pIniFile;
@@ -184,6 +210,14 @@ void OptionsDlg_ParseImageFiles(HWND hWnd)
 	FreeIniLines(pIniFile);
 }
 
+//----------------------------------------------------------------------------
+// OptionsDlg_UnmountImage
+// 
+// Removes the currently selected image file from the list and rescans devices
+//
+// -> hWnd = window handle of options dialog
+// <- --
+//----------------------------------------------------------------------------
 void OptionsDlg_UnmountImage(HWND hWnd)
 {
 	INI_LINE *pLine, *pIniFile;
@@ -273,6 +307,14 @@ void OptionsDlg_UnmountImage(HWND hWnd)
 	
 }
 
+//----------------------------------------------------------------------------
+// WM_INITDIALOG
+// 
+// reads settings from global variables, reads image file list from INI file
+//
+// -> hWnd = window handle of options dialog
+// <- --
+//----------------------------------------------------------------------------
 void OptionsDlg_OnInitDialog(HWND hWnd)
 {
 	LOG("OptionsDlg_OnInitDialog()\n");
@@ -304,6 +346,15 @@ void OptionsDlg_OnInitDialog(HWND hWnd)
 		(LPARAM)0);
 }
 
+//----------------------------------------------------------------------------
+// OptionsDlgProc
+// 
+// This is the message processing function for the options dialog thread
+//
+// -> --
+// <- TRUE, if the message was processed
+//    FALSE, if not
+//----------------------------------------------------------------------------
 INT_PTR CALLBACK OptionsDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam,
 	LPARAM lParam)
 {
