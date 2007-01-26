@@ -230,6 +230,228 @@ int GetContiguousBlocks(DISK *pDisk, DWORD dwNumBlocks)
 }
 
 //----------------------------------------------------------------------------
+// ReadBlock
+// 
+// Reads one block from CDROM, harddisk or image file
+// Get this block out of the cache, if possible
+// If not, read a minimum of READ_AHEAD blocks into cache
+// 
+// -> pDisk = pointer to initialized disk structure
+//    dwBlock = block to read
+//    ucBuf = pointer to destination buffer (512 bytes)
+// <- ERR_OK
+//    ERR_NOT_OPEN
+//    ERR_OUT_OF_BOUNDS
+//    ERR_READ
+//    ERR_MEM
+//    ERR_NOT_SUPPORTED
+//	  ERR_SEEK
+//----------------------------------------------------------------------------
+int ReadBlock(DISK *pDisk, DWORD dwBlock, unsigned char *ucBuf)
+{
+	DWORD dwBytesRead = 0, dwFirstBlock, dwBlocksToRead, dwLow, dwHigh,
+		dwError, dwCurrentBlock, dwBlocks;
+	unsigned char *ucTemp, *ucTempUnaligned;
+	__int64 iiFilepointer;
+	int i, iResult;
+
+	// check pointer
+	if(NULL==pDisk) return ERR_NOT_OPEN;
+
+	// check device status
+	if(INVALID_HANDLE_VALUE==pDisk->hHandle) return ERR_NOT_OPEN;
+
+	// check boundaries
+	if(dwBlock>=pDisk->dwPhysicalBlocks) return ERR_OUT_OF_BOUNDS;
+
+	// try to read this block from cache
+	if(ERR_OK==CacheReadBlock(pDisk, dwBlock, ucBuf)) return ERR_OK;
+
+	// -> block not in cache, so read number of READ_AHEAD blocks into cache
+
+	// buffer has to be aligned at a 2048 byte boundary minimum
+	// this is necessary for successfully reading from CDROM devices
+	ucTempUnaligned = malloc(READ_AHEAD*512+2048);
+	if(NULL==ucTempUnaligned)
+	{
+		LOG("ReadFile(): ERR_MEM "
+			"(error allocating read ahead sector buffer.\n");
+		return ERR_MEM;
+	}
+	ucTemp = ucTempUnaligned;
+	while(0!=((DWORD)ucTemp & (DWORD)2047)) ucTemp++;
+
+	dwBlocksToRead = READ_AHEAD;
+	dwFirstBlock = dwBlock;
+
+	// handle CDROM, Floppy, disk and ISO images with the same functions
+	if((TYPE_CDROM==pDisk->iType)
+	   ||(TYPE_DISK==pDisk->iType)
+	   ||(TYPE_FLOPPY==pDisk->iType))
+	{
+		// fall back to a 2048 byte boundary for CDROM access to work
+		if(TYPE_CDROM==pDisk->iType) dwFirstBlock = (dwBlock&0xFFFFFFFC);
+
+		// treat floppy differently (read complete track)
+		if(TYPE_FLOPPY==pDisk->iType)
+		{
+			dwBlocksToRead = pDisk->DiskGeometry.Geometry.SectorsPerTrack;
+			dwFirstBlock -= dwFirstBlock % dwBlocksToRead;
+		}
+		
+		// check physical limits
+		if((dwFirstBlock+dwBlocksToRead)>=pDisk->dwPhysicalBlocks)
+		{
+			dwBlocksToRead = pDisk->dwPhysicalBlocks - dwFirstBlock;
+		}
+		
+		// set file pointer
+		iiFilepointer = dwFirstBlock; iiFilepointer *= 512;
+		dwLow = iiFilepointer & 0xFFFFFFFF;
+		dwHigh = (iiFilepointer >> 32) & 0xFFFFFFFF;
+		if(0xFFFFFFFF==SetFilePointer(pDisk->hHandle, dwLow, &dwHigh, 
+			FILE_BEGIN))
+		{
+			dwError = GetLastError();
+			if(NO_ERROR != dwError)
+			{
+				LOG("ReadBlock(): ERR_SEEK\n"); LOG_ERR(dwError);
+				free(ucTempUnaligned);
+				return ERR_SEEK;
+			}
+		}		
+		
+		// read from device
+		iResult=ReadFile(pDisk->hHandle, ucTemp, dwBlocksToRead*512,
+						 &dwBytesRead, 0);
+		if((iResult==0)||((dwBlocksToRead*512)!=dwBytesRead))
+		{
+			LOG("ReadBlock(): ERR_READ\n");
+			free(ucTempUnaligned);
+			return ERR_READ;
+		}
+	}
+	else if(TYPE_FILE==pDisk->iType)
+	{
+		// check physical limits
+		if((dwFirstBlock+dwBlocksToRead)>=pDisk->dwPhysicalBlocks)
+		{
+			dwBlocksToRead = pDisk->dwPhysicalBlocks - dwFirstBlock;
+		}
+
+		// read from ISO image
+		if(IMAGE_FILE_ISO==pDisk->iImageType)
+		{
+			// set file pointer
+			iiFilepointer = dwFirstBlock; iiFilepointer *= 512;
+			dwLow = iiFilepointer & 0xFFFFFFFF;
+			dwHigh = (iiFilepointer >> 32) & 0xFFFFFFFF;
+			if(0xFFFFFFFF==SetFilePointer(pDisk->hHandle, dwLow, &dwHigh, 
+				FILE_BEGIN))
+			{
+				dwError = GetLastError();
+				if(NO_ERROR != dwError)
+				{
+					LOG("ReadBlock(): ERR_SEEK\n"); LOG_ERR(dwError);
+					free(ucTempUnaligned);
+					return ERR_SEEK;
+				}
+			}		
+			
+			// read from device
+			iResult=ReadFile(pDisk->hHandle, ucTemp, dwBlocksToRead*512,
+							 &dwBytesRead, 0);
+			if((iResult==0)||((dwBlocksToRead*512)!=dwBytesRead))
+			{
+				LOG("ReadBlock(): ERR_READ\n");
+				free(ucTempUnaligned);
+				return ERR_READ;
+			}
+		}
+		// read from MODE1 CD image
+		else if(IMAGE_FILE_MODE1==pDisk->iImageType)
+		{
+			// fall back to a 2048 byte boundary for to match the first
+			// 2352 byte sector
+			dwFirstBlock = (dwFirstBlock&0xFFFFFFFC);
+			dwCurrentBlock = dwFirstBlock;
+			i = 0;
+			
+			// read 4 blocks at a time (= one sector)
+			while(dwCurrentBlock<(dwFirstBlock + dwBlocksToRead))
+			{
+				// set file pointer
+				iiFilepointer = dwCurrentBlock;
+				
+				// iiFilepointer is guaranteed to be at a 4 block boundary,
+				// so there's no need to add the remainder from the >>2
+				// operation to the pointer
+				iiFilepointer = (iiFilepointer>>2)*2352 + 16;
+				dwLow = iiFilepointer & 0xFFFFFFFF;
+				dwHigh = (iiFilepointer >> 32) & 0xFFFFFFFF;
+				if(0xFFFFFFFF==SetFilePointer(pDisk->hHandle, dwLow, &dwHigh, 
+					FILE_BEGIN))
+				{
+					dwError = GetLastError();
+					if(NO_ERROR != dwError)
+					{
+						LOG("ReadBlock(): ERR_SEEK\n"); LOG_ERR(dwError);
+						free(ucTempUnaligned);
+						return ERR_SEEK;
+					}
+				}		
+
+				// read 4 blocks if possible
+				dwBlocks = 4; 
+				while((dwCurrentBlock+dwBlocks)>(dwFirstBlock+dwBlocksToRead))
+					dwBlocks--;
+					
+				// read from device
+				iResult=ReadFile(pDisk->hHandle, ucTemp + i*512, dwBlocks*512,
+								 &dwBytesRead, 0);
+				if((iResult==0)||((dwBlocks*512)!=dwBytesRead))
+				{
+					LOG("ReadBlock(): ERR_READ\n");
+					free(ucTempUnaligned);
+					return ERR_READ;
+				}
+				
+				dwCurrentBlock += dwBlocks;
+				i += dwBlocks;
+			}
+		}
+		else
+		{
+			free(ucTempUnaligned);
+			return ERR_NOT_SUPPORTED;
+		}
+	}
+	else
+	{
+		free(ucTempUnaligned);
+		return ERR_NOT_SUPPORTED;
+	}
+
+	// add freshly read blocks to the cache
+	for(i=0; i<(int)dwBlocksToRead; i++)
+	{
+		CacheInsertReadBlock(pDisk, dwFirstBlock+i, ucTemp + i*512);
+
+		// is this the block we originally wanted to have?
+		if((dwFirstBlock+i)==dwBlock)
+		{
+			// deliver it to the calling function
+			memcpy(ucBuf, ucTemp+i*512, 512);
+		}
+	}
+
+	free(ucTempUnaligned);
+	pDisk->dwReadCounter++;
+	
+	return ERR_OK;
+}
+
+//----------------------------------------------------------------------------
 // ReadBlocks
 // 
 // Read multiple blocks from CDROM, harddisk or image file
@@ -459,144 +681,6 @@ void MakeLegalName(char *cName)
 			cName[j] = cName[j+1];
 		}
 	}
-}
-
-//----------------------------------------------------------------------------
-// ReadBlock
-// 
-// Reads one block from CDROM, harddisk or image file
-// Get this block out of the cache, if possible
-// If not, read a minimum of READ_AHEAD blocks into cache
-// 
-// -> pDisk = pointer to initialized disk structure
-//    dwBlock = block to read
-//    ucBuf = pointer to destination buffer (512 bytes)
-// <- ERR_OK
-//    ERR_NOT_OPEN
-//    ERR_OUT_OF_BOUNDS
-//    ERR_READ
-//    ERR_MEM
-//    ERR_NOT_SUPPORTED
-//	  ERR_SEEK
-//----------------------------------------------------------------------------
-int ReadBlock(DISK *pDisk, DWORD dwBlock, unsigned char *ucBuf)
-{
-	DWORD dwBytesRead = 0, dwFirstBlock, dwBlocksToRead, dwLow, dwHigh,
-		dwError;
-	unsigned char *ucTemp, *ucTempUnaligned;
-	__int64 iiFilepointer;
-	int i, iResult;
-
-	// check pointer
-	if(NULL==pDisk) return ERR_NOT_OPEN;
-
-	// check boundaries
-	if(dwBlock>=pDisk->dwPhysicalBlocks) return ERR_OUT_OF_BOUNDS;
-
-	// try to read this block from cache
-	if(ERR_OK==CacheReadBlock(pDisk, dwBlock, ucBuf)) return ERR_OK;
-
-	// -> block not in cache, so read number of READ_AHEAD blocks into cache
-
-	// buffer has to be aligned at a 2048 byte boundary minimum
-	// this is necessary for successfully reading from CDROM devices
-	ucTempUnaligned = malloc(READ_AHEAD*512+2048);
-	if(NULL==ucTempUnaligned)
-	{
-		LOG("ReadFile(): ERR_MEM "
-			"(error allocating read ahead sector buffer.\n");
-		return ERR_MEM;
-	}
-	ucTemp = ucTempUnaligned;
-	while(0!=((DWORD)ucTemp & (DWORD)2047)) ucTemp++;
-	
-	if((TYPE_CDROM==pDisk->iType)
-	   ||(TYPE_DISK==pDisk->iType)
-	   ||(TYPE_FLOPPY==pDisk->iType)
-	   ||((TYPE_FILE==pDisk->iType)&&(IMAGE_FILE_ISO==pDisk->iImageType)))
-	{
-		// check device status
-		if(INVALID_HANDLE_VALUE==pDisk->hHandle)
-		{
-			free(ucTempUnaligned);
-			return ERR_NOT_OPEN;
-		}
-
-		dwBlocksToRead = READ_AHEAD;
-		dwFirstBlock = dwBlock;
-				
-		// fall back to a 2048 byte boundary for CDROM access to work
-		if(TYPE_CDROM==pDisk->iType) dwFirstBlock = (dwBlock&0xFFFFFFFC);
-
-		// treat floppy differently (read complete track)
-		if(TYPE_FLOPPY==pDisk->iType)
-		{
-			dwBlocksToRead = pDisk->DiskGeometry.Geometry.SectorsPerTrack;
-			dwFirstBlock -= dwFirstBlock % dwBlocksToRead;
-		}
-		
-		// check physical limits
-		if((dwFirstBlock+dwBlocksToRead)>=pDisk->dwPhysicalBlocks)
-		{
-			dwBlocksToRead = pDisk->dwPhysicalBlocks - dwFirstBlock;
-		}
-		
-		// set file pointer
-		iiFilepointer = dwFirstBlock; iiFilepointer *= 512;
-		dwLow = iiFilepointer & 0xFFFFFFFF;
-		dwHigh = (iiFilepointer >> 32) & 0xFFFFFFFF;
-		if(0xFFFFFFFF==SetFilePointer(pDisk->hHandle, dwLow, &dwHigh, 
-			FILE_BEGIN))
-		{
-			dwError = GetLastError();
-			if(NO_ERROR != dwError)
-			{
-				LOG("ReadBlock(): ERR_SEEK\n"); LOG_ERR(dwError);
-				free(ucTempUnaligned);
-				return ERR_SEEK;
-			}
-		}		
-		
-		// read from device
-		iResult=ReadFile(pDisk->hHandle, ucTemp, dwBlocksToRead*512,
-						 &dwBytesRead, 0);
-		if((iResult==0)||((dwBlocksToRead*512)!=dwBytesRead))
-		{
-			LOG("ReadBlock(): ERR_READ\n");
-			free(ucTempUnaligned);
-			return ERR_READ;
-		}
-	}
-	else if(TYPE_FILE==pDisk->iType)
-	{
-		dwFirstBlock = dwBlock;
-		
-		free(ucTempUnaligned);
-		return ERR_NOT_SUPPORTED;
-	}
-	else
-	{
-		free(ucTempUnaligned);
-		return ERR_NOT_SUPPORTED;
-	}
-
-	// add freshly read blocks to the cache
-	for(i=0; i<(int)dwBlocksToRead; i++)
-	{
-		CacheInsertReadBlock(pDisk, dwFirstBlock+i, ucTemp + i*512);
-
-		// is this the block we originally wanted to have?
-		if((dwFirstBlock+i)==dwBlock)
-		{
-			// deliver it to the calling function
-			memcpy(ucBuf, ucTemp+i*512, 512);
-		}
-	}
-
-	free(ucTempUnaligned);
-	pDisk->dwReadCounter++;
-	
-	return ERR_OK;
 }
 
 //---------------------------------------------------------------------------
