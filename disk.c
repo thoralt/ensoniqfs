@@ -284,7 +284,7 @@ int ReadBlock(DISK *pDisk, DWORD dwBlock, unsigned char *ucBuf)
 	dwBlocksToRead = READ_AHEAD;
 	dwFirstBlock = dwBlock;
 
-	// handle CDROM, Floppy, disk and ISO images with the same functions
+	// handle CDROM, Floppy and other disks with the same functions
 	if((TYPE_CDROM==pDisk->iType)
 	   ||(TYPE_DISK==pDisk->iType)
 	   ||(TYPE_FLOPPY==pDisk->iType))
