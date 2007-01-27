@@ -21,17 +21,16 @@ With EnsoniqFS you can mount the following Ensoniq file systems:
 - SCSI & IDE removable disks (i. e. ZIP drives)
 - SCSI & IDE CDROMs
 - floppy disks (direct file access, using driver OmniFlop, see below)
-- image files (ISO and Mode1CDROM (BIN) only the moment, for GKH/EDE/EDA/EDT
-  refer to plugin EnsoniqUnpacker, downloadable via
-  http://www.thoralt.de/projects/ensoniqunpacker/ensoniqunpacker.html)
+- image files ISO, IMG, Mode1CDROM (BIN), GKH, EDE, EDA, EDT, EDV
 
 Once mounted, on a file system you can do the following with Total Commander:
 - read, write, copy, move, rename, delete files on Ensoniq media
 - copy, move files from/to Windows drives
 - create, rename, copy, move whole directories
 
-CDROMs and BIN files (Mode1 CDROM images) are read only, writing is not
-supported (write support for BIN files could be implemented in the future).
+CDROMs and BIN (Mode1 CDROM images)/GKH/EDE/EDA/EDT/EDV files are read only, 
+writing is not supported (write support for the image files could be 
+implemented in the future).
 
 With the above, you get a complete file manager for Ensoniq disks.
 
@@ -117,10 +116,11 @@ same way as you do with Windows files and folders.
 4.1.2 Image files
 
 Initially, the image folder is empty. To add a new image file, go to the other
-tab of Total Commander and browse to an ISO or BIN image file you want to
-mount. Press <F5> to copy it to the image file folder. It will be mounted and 
-you can browse it. Another way of adding (and removing) image files is through 
-the "Options" dialog, see 4.1.4.
+tab of Total Commander and browse to an image file you want to mount. Press 
+<F5> to copy it to the image file folder. It will be mounted and you can browse
+it. Another way of adding (and removing) image files is through the "Options" 
+dialog, see 4.1.4. The "Options" dialog also is the only method to unmount an
+image file.
 
 Note: Having many images mounted can be a real memory eater. For each image
 file a cache and lots of other data structures are created. So be sure to
@@ -148,7 +148,8 @@ Activate this checkbox to allow EnsoniqFS to use your SCSI and IDE harddisks
 and removable disks (e. g. ZIP drives should show up there). 
 
 [ ] Enable image file support
-Activate this checkbox to allow EnsoniqFS to use image files. 
+Activate this checkbox to allow EnsoniqFS to use image files. EnsoniqFS
+supports ISO (read/write) and BIN, GKH, EDE, EDA, EDT, EDV (read only).
 
 If you uncheck any of the above options, EnsoniqFS doesn't scan the associated
 drives or files. This can speed up the detection process.
