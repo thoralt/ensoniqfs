@@ -221,7 +221,12 @@ void OptionsDlg_ParseImageFiles(HWND hWnd)
 //----------------------------------------------------------------------------
 void OptionsDlg_MountImage(HWND hWnd)
 {
-	char cFilter[] = "Supported image files (*.iso;*.bin)|*.iso;*.bin|"
+	char cFilter[] = "All supported image files (*.iso;*.bin;*.gkh;*.ed?)|"
+		"*.iso;*.bin;*.gkh;*.ed?|"
+		"ISO images (*.iso)|*.iso|"
+		"BIN images (*.bin)|*.bin|"
+		"Epsread/Epswrite images (*.gkh)|*.gkh|"
+		"Giebler images (*.ed?)|*.ed?|"
 		"All files (*.*)|*.*||",
 		cFN[512], cTitle[] = "Open image file";
 	OPENFILENAME ofn;
@@ -246,6 +251,7 @@ void OptionsDlg_MountImage(HWND hWnd)
 	if(GetOpenFileName(&ofn))
 	{
 		AddToImageList(ofn.lpstrFile);
+		OptionsDlg_ParseImageFiles(hWnd);
 		m_iDeviceListChanged = 1;
 	}
 }
