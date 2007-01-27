@@ -253,7 +253,7 @@ int ReadBlock(DISK *pDisk, DWORD dwBlock, unsigned char *ucBuf)
 		dwError, dwCurrentBlock, dwBlocks;
 	unsigned char *ucTemp, *ucTempUnaligned;
 	__int64 iiFilepointer;
-	int i, iResult;
+	int i, iResult, iCount, iLen, j, iOffset;
 
 	// check pointer
 	if(NULL==pDisk) return ERR_NOT_OPEN;
@@ -339,11 +339,14 @@ int ReadBlock(DISK *pDisk, DWORD dwBlock, unsigned char *ucBuf)
 			dwBlocksToRead = pDisk->dwPhysicalBlocks - dwFirstBlock;
 		}
 
-		// read from ISO image
-		if(IMAGE_FILE_ISO==pDisk->iImageType)
+		// read from ISO or GKH image
+		if((IMAGE_FILE_ISO==pDisk->iImageType)||
+		   (IMAGE_FILE_GKH==pDisk->iImageType))
 		{
 			// set file pointer
 			iiFilepointer = dwFirstBlock; iiFilepointer *= 512;
+			iiFilepointer += pDisk->dwDataOffset;
+			
 			dwLow = iiFilepointer & 0xFFFFFFFF;
 			dwHigh = (iiFilepointer >> 32) & 0xFFFFFFFF;
 			if(0xFFFFFFFF==SetFilePointer(pDisk->hHandle, dwLow, &dwHigh, 
@@ -368,6 +371,7 @@ int ReadBlock(DISK *pDisk, DWORD dwBlock, unsigned char *ucBuf)
 				return ERR_READ;
 			}
 		}
+
 		// read from MODE1 CD image
 		else if(IMAGE_FILE_MODE1==pDisk->iImageType)
 		{
@@ -418,6 +422,61 @@ int ReadBlock(DISK *pDisk, DWORD dwBlock, unsigned char *ucBuf)
 				
 				dwCurrentBlock += dwBlocks;
 				i += dwBlocks;
+			}
+		}
+		
+		// read from Giebler image
+		else if(IMAGE_FILE_GIEBLER==pDisk->iImageType)
+		{
+			if(NULL==pDisk->ucGieblerMap)
+			{
+				free(ucTempUnaligned);
+				return ERR_NOT_SUPPORTED;
+			}
+			
+			iLen = (0x60==pDisk->dwGieblerMapOffset)?3200:1600;
+
+			// find the block in the allocation bitmap
+			for(j=0; j<(int)dwBlocksToRead; j++)
+			{
+				iOffset = -1; iCount = 0; 
+				for(i=0; i<iLen; i++)
+				{
+					// get the corresponding bit from the Giebler bitmap table
+					// if the bit == 0, then this block is included in the file
+				    if(!((pDisk->ucGieblerMap[i>>3]>>(7-(i&0x07)))&0x01))
+					{
+					    // block found?
+					    if(i==((int)dwFirstBlock+j))
+					    {
+							iOffset = iCount*512 + 512;
+							break;
+						}
+						iCount++;
+					}
+				}
+				
+				// block not found?
+				if(iOffset==-1)
+				{
+					memset(ucTemp+j*512, 0, 512);
+				}
+				else
+				{
+					// seek to offset (no 64 bit pointer required since
+					// Giebler files won't be bigger than an HD floppy)
+					SetFilePointer(pDisk->hHandle, iOffset, 0, FILE_BEGIN);
+
+					// read one block
+					iResult=ReadFile(pDisk->hHandle, ucTemp+j*512, 512,
+									 &dwBytesRead, 0);
+					if((iResult==0)||(512!=dwBytesRead))
+					{
+						LOG("ReadBlock(): ERR_READ\n");
+						free(ucTempUnaligned);
+						return ERR_READ;
+					}
+				}
 			}
 		}
 		else
@@ -877,7 +936,8 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 
 	char cBuf[BUF_SIZE], cLongName[260], cMsDosName[260], cText[1024];
 	DISK *pDisk, *pDiskRoot = NULL, *pCurrentDisk = NULL;
-	DWORD dwBytesRead, dwBytesReturned, dwError, fsl, fsh;
+	DWORD dwBytesRead, dwBytesReturned, dwError, fsl, fsh, dwDataOffset, 
+		dwGieblerMapOffset;
 	unsigned char *ucBuf = NULL, *ucBufUnaligned = NULL;
 	int i, iType, j, iIsEnsoniq = 0, iImageType = IMAGE_FILE_UNKNOWN,
 		iDeviceCounter, iMaxDevices;
@@ -1078,138 +1138,12 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 			continue;
 		}
 
-		LOG("OK.\n  Reading block 0-7: ");
-
-		// read first 8 sectors
-		if(0==ReadFile(h, ucBuf, ID_SIZE, &dwBytesRead, NULL))
-		{
-			dwError = GetLastError();
-			LOG("failed: "); LOG_ERR(dwError);
-			if(TYPE_FLOPPY==iType)
-			{
-				DeviceIoControl(h, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0,
-								&dwBytesReturned, NULL);
-				CloseHandle(h);
-				EnableExtendedFormats(cMsDosName, FALSE);
-			}
-			else CloseHandle(h);
-			free(ucBufUnaligned);
-			continue;
-		}
-
 		if(TYPE_FILE==iType)
 		{
-			iImageType = IMAGE_FILE_UNKNOWN;
-			/*	
-			// GKH?
-			if(IMAGE_FILE_UNKNOWN==iImageType)
-			{
-				if(0==strncmp(ucBuf, "TDDFI", 5))	// GKH
-				{
-					LOG("File identified as GKH.\n");
-					iImageType = IMAGE_FILE_GKH;
-	
-					// TODO
-					// re-read first sectors so they appear correctly in ucBuf
-				}
-			}
-			
-			
-			// Giebler?
-			if(IMAGE_FILE_UNKNOWN==iImageType)
-			{
-				if((ucBuf[0x00]==0x0D) &&
-				   (ucBuf[0x01]==0x0A) &&
-				   (ucBuf[0x4E]==0x0D) &&
-				   (ucBuf[0x4F]==0x0A))
-				{
-					switch(ucBuf[0x1FF])
-					{
-						case 0x03:    // EDE DD
-						case 0x07:    // EDT DD
-							iMapOffset = 0xA0;
-						break;
-						
-						case 0xCB:    // EDA HD
-						case 0xCC:    // EDT HD
-							iMapOffset = 0x60;
-						break;
-						
-						default:
-							iMapOffset = 0x00;
-					}
-				
-					if((ucBuf[iMapOffset-3]==0x0D) &&
-					   (ucBuf[iMapOffset-2]==0x0A) &&
-					   (ucBuf[iMapOffset-1]==0x1A))
-					{
-						LOG("File identified as Giebler image.\n");
-						iImageType = IMAGE_FILE_GIEBLER;
-	
-						// TODO
-						// re-read first sectors so they appear correctly in ucBuf
-					}
-				}
-			}
-			*/
-			
-			// Mode1-CDROM?
-			if(IMAGE_FILE_UNKNOWN==iImageType)
-			{
-				if((0x00==ucBuf[ 0])&&
-				   (0xFF==ucBuf[ 1])&&
-				   (0xFF==ucBuf[ 2])&&
-				   (0xFF==ucBuf[ 3])&&
-				   (0xFF==ucBuf[ 4])&&
-				   (0xFF==ucBuf[ 5])&&
-				   (0xFF==ucBuf[ 6])&&
-				   (0xFF==ucBuf[ 7])&&
-				   (0xFF==ucBuf[ 8])&&
-				   (0xFF==ucBuf[ 9])&&
-				   (0xFF==ucBuf[10])&&
-				   (0x00==ucBuf[11]))
-				{
-					if(('I'==ucBuf[ 38+512*1+16])&&('D'==ucBuf[ 39+512*1+16])&&
-					   ('O'==ucBuf[ 28+512*2+16])&&('S'==ucBuf[ 29+512*2+16])&&
-					   ('D'==ucBuf[510+2352+16])&&('R'==ucBuf[511+2352+16])&&
-					   ('F'==ucBuf[510+2352+512*1+16])&&
-					   ('B'==ucBuf[511+2352+512*1+16]))
-					{		
-						LOG("File identified as Mode1CD.\n");
-						iImageType = IMAGE_FILE_MODE1;
-						iIsEnsoniq = 1;
-						
-						// re-read first sectors so they appear correctly 
-						// in ucBuf
-						LOG("Re-reading header: ");
-						for(j=0; j<8; j++)
-						{
-							SetFilePointer(h, (j>>2)*2352+16+((j&0x03)*512), 
-								0, FILE_BEGIN);
-							DWORD dw;
-							ReadFile(h, ucBuf+j*512, 512, &dw, 0);
-						}
-						LOG("OK.\n");
-					}
-				}
-			}
+			// Detect image type
+			iImageType = DetectImageFileType(h, ucBuf, &dwDataOffset, 
+				&dwGieblerMapOffset);
 
-			// ISO?
-			if(IMAGE_FILE_UNKNOWN==iImageType)
-			{
-				if(('I'==ucBuf[ 38+512*1])&&('D'==ucBuf[ 39+512*1])&&
-				   ('O'==ucBuf[ 28+512*2])&&('S'==ucBuf[ 29+512*2])&&
-				   ('D'==ucBuf[510+512*4])&&('R'==ucBuf[511+512*4])&&
-				   ('F'==ucBuf[510+512*5])&&('B'==ucBuf[511+512*5]))
-				{
-					LOG("File identified as ISO image.\n");
-					iImageType = IMAGE_FILE_ISO;
-					iIsEnsoniq = 1;
-					
-					// re-reading not necessary, ISO is a plain image
-				}
-			}
-			
 			if(IMAGE_FILE_UNKNOWN==iImageType)
 			{
 				LOG("Warning: Unknown image file type. Skipping.\n");
@@ -1219,39 +1153,58 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		}
 		else	// not an image file
 		{
-			LOG("OK.\n  Checking Ensoniq signature: ");
-			if(('I'!=ucBuf[ 38+512*1])||('D'!=ucBuf[ 39+512*1])||
-			   ('O'!=ucBuf[ 28+512*2])||('S'!=ucBuf[ 29+512*2])||
-			   ('D'!=ucBuf[510+512*4])||('R'!=ucBuf[511+512*4]))
-			{
-				LOG("not found, ");
+			LOG("OK.\n  Reading block 0-7: ");
 	
-				// leave out this disk if only scanning for Ensoniq disks
-				if(0==dwAllowNonEnsoniqFilesystems)
+			// read first 8 sectors
+			if(0==ReadFile(h, ucBuf, ID_SIZE, &dwBytesRead, NULL))
+			{
+				dwError = GetLastError();
+				LOG("failed: "); LOG_ERR(dwError);
+				if(TYPE_FLOPPY==iType)
 				{
-					LOG("skipping.\n");
-					if(TYPE_FLOPPY==iType)
-					{
-						DeviceIoControl(h, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0,
-										&dwBytesReturned, NULL);
-						CloseHandle(h);
-						EnableExtendedFormats(cMsDosName, FALSE);
-					}
-					else CloseHandle(h);
-					free(ucBufUnaligned);
-					continue;
+					DeviceIoControl(h, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0,
+									&dwBytesReturned, NULL);
+					CloseHandle(h);
+					EnableExtendedFormats(cMsDosName, FALSE);
 				}
-				else
+				else CloseHandle(h);
+				free(ucBufUnaligned);
+				continue;
+			}
+		}
+
+		LOG("OK.\n  Checking Ensoniq signature: ");
+		if(('I'!=ucBuf[ 38+512*1])||('D'!=ucBuf[ 39+512*1])||
+		   ('O'!=ucBuf[ 28+512*2])||('S'!=ucBuf[ 29+512*2])||
+		   ('D'!=ucBuf[510+512*4])||('R'!=ucBuf[511+512*4]))
+		{
+			LOG("not found, ");
+
+			// leave out this disk if only scanning for Ensoniq disks
+			if(0==dwAllowNonEnsoniqFilesystems)
+			{
+				LOG("skipping.\n");
+				if(TYPE_FLOPPY==iType)
 				{
-					LOG("ignoring (WARNING: RISK OF DATA LOSS!), ");
-					iIsEnsoniq = 0;
+					DeviceIoControl(h, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0,
+									&dwBytesReturned, NULL);
+					CloseHandle(h);
+					EnableExtendedFormats(cMsDosName, FALSE);
 				}
+				else CloseHandle(h);
+				free(ucBufUnaligned);
+				continue;
 			}
 			else
 			{
-				LOG("OK, ");
-				iIsEnsoniq = 1;
+				LOG("ignoring (WARNING: RISK OF DATA LOSS!), ");
+				iIsEnsoniq = 0;
 			}
+		}
+		else
+		{
+			LOG("OK, ");
+			iIsEnsoniq = 1;
 		}
 		
 		// create new disk structure
@@ -1280,7 +1233,10 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		pDisk->iType = iType;
 		pDisk->iImageType = iImageType;
 		pDisk->iIsEnsoniq = iIsEnsoniq;
-		
+		pDisk->iImageType = iImageType;
+		pDisk->dwDataOffset = dwDataOffset;
+		pDisk->dwGieblerMapOffset = dwGieblerMapOffset;
+
 		// read disk geometry
 		// treat floppy and image files different (see below)
 		if((TYPE_FLOPPY!=iType)&&(TYPE_FILE!=iType))
@@ -1441,6 +1397,39 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		LOG_INT(pDisk->dwPhysicalBlocks);
 		LOG(" blocks (physical), "); LOG_INT(pDisk->dwBlocksFree);
 		LOG(" blocks free.\n");
+
+		// read Giebler allocation bitmap
+		if((TYPE_FILE==iType)&&(IMAGE_FILE_GIEBLER==iImageType))
+		{
+			i = (dwGieblerMapOffset==0x60)?400:200;
+			pDisk->ucGieblerMap = malloc(i);
+			if(NULL==pDisk->ucGieblerMap)
+			{
+				LOG("Error allocating Giebler map.\n");
+				free(ucBufUnaligned);
+				free(pDisk->ucCache);
+				free(pDisk->dwCacheAge);
+				free(pDisk->dwCacheTable);
+				free(pDisk->ucCacheFlags);
+				free(pDisk);
+				continue;
+			}
+			
+			SetFilePointer(h, dwGieblerMapOffset, 0, FILE_BEGIN);
+			if(0==ReadFile(h, pDisk->ucGieblerMap, i, &dwBytesRead, NULL))
+			{
+				dwError = GetLastError();
+				LOG("Error reading Giebler map: "); LOG_ERR(dwError);
+				free(ucBufUnaligned);
+				free(pDisk->ucCache);
+				free(pDisk->dwCacheAge);
+				free(pDisk->dwCacheTable);
+				free(pDisk->ucCacheFlags);
+				free(pDisk->ucGieblerMap);
+				free(pDisk);
+				continue;
+			}
+		}
 	
 		// append newly created disk structure to the list
 		if(0==pDiskRoot)
@@ -1463,6 +1452,223 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 	
 	return pDiskRoot;
 }
+
+//----------------------------------------------------------------------------
+// DetectImageFileType
+// 
+// Detects the format of a given image file, reads the first 8 blocks for
+// further processing
+// 
+// -> h = handle to already opened file or device
+//    ucReturn Buf = buffer to receive the first 8 blocks (decoded according to
+//                   detected file format, 8*512 bytes)
+//                   if NULL, the first 8 blocks will not be returned
+//    dwDataOffset = pointer to variable to receive the offset of the 
+//                   image data in the file (for GKH and GIEBLER only)
+//                   can be NULL
+//    dwGieblerMapOffset = pointer to variable to receive the offset of the
+//                         Giebler allocation bitmap (varies for DD and HD)
+//                         can be NULL
+//    dwGieblerMapLength = pointer to variable to receive the length of the
+//                         Giebler allocation bitmap
+//                         can be NULL
+// <- IMAGE_FILE_UNKNOWN
+//    IMAGE_FILE_ISO
+//    IMAGE_FILE_MODE1
+//    IMAGE_FILE_GKH
+//    IMAGE_FILE_GIEBLER
+//----------------------------------------------------------------------------
+int DetectImageFileType(HANDLE h, unsigned char *ucReturnBuf, 
+	DWORD *dwDataOffset, DWORD *dwGieblerMapOffset)
+{
+	unsigned char ucBuf[ID_SIZE], ucFirstGieblerMap;
+	DWORD dwBytesRead, dwError;
+	int iMapOffset = 0, i, iNumTags, iDataOffset, iMapSize, iOffset;
+	
+	LOG("  Detecting image file type: ");
+
+	// read first 8 sectors
+	SetFilePointer(h, 0, 0, FILE_BEGIN);
+	if(0==ReadFile(h, ucBuf, ID_SIZE, &dwBytesRead, NULL))
+	{
+		dwError = GetLastError();
+		LOG("failed: "); LOG_ERR(dwError);
+		return IMAGE_FILE_UNKNOWN;
+	}
+	
+	// GKH?
+	if(0==strncmp(ucBuf, "TDDFI", 5))	// GKH
+	{
+		LOG("File identified as GKH.\n");
+
+		// loop through all available tags
+		iNumTags = (ucBuf[0x06]) | (ucBuf[0x07]<<8);
+		iDataOffset = 58;
+		for(i=0; i<iNumTags; i++)
+		{
+			// image location tag?
+			if((0x0B==ucBuf[i*10+8])&&(0x0B==ucBuf[i*10+9]))
+			{
+				iDataOffset = (ucBuf[i*10+14])    |(ucBuf[i*10+15]<<8)|
+							  (ucBuf[i*10+16]<<16)|(ucBuf[i*10+17]<<24);
+			}
+		}
+
+		// re-read first sectors so they appear correctly in ucBuf
+		if(ucReturnBuf)
+		{
+			SetFilePointer(h, iDataOffset, 0, FILE_BEGIN);
+			if(0==ReadFile(h, ucReturnBuf, ID_SIZE, &dwBytesRead, NULL))
+			{
+				dwError = GetLastError();
+				LOG("failed: "); LOG_ERR(dwError);
+				return IMAGE_FILE_UNKNOWN;
+			}
+		}
+		
+		if(dwDataOffset) *dwDataOffset = iDataOffset;
+	
+		return IMAGE_FILE_GKH;
+	}
+		
+	// Giebler?
+	if((ucBuf[0x00]==0x0D) &&
+	   (ucBuf[0x01]==0x0A) &&
+	   (ucBuf[0x4E]==0x0D) &&
+	   (ucBuf[0x4F]==0x0A))
+	{
+		switch(ucBuf[0x1FF])
+		{
+			case 0x03:    // EDE DD
+			case 0x07:    // EDT DD
+				iMapOffset = 0xA0;
+				iMapSize = 200;
+			break;
+			
+			case 0xCB:    // EDA HD
+			case 0xCC:    // EDT HD
+				iMapOffset = 0x60;
+				iMapSize = 400;
+			break;
+			
+			default:
+				iMapOffset = 0x00;
+				iMapSize = 0;
+		}
+	
+		if((ucBuf[iMapOffset-3]==0x0D) &&
+		   (ucBuf[iMapOffset-2]==0x0A) &&
+		   (ucBuf[iMapOffset-1]==0x1A))
+		{
+			LOG("File identified as Giebler image.\n");
+			if(dwDataOffset) *dwDataOffset = 512;
+			if(dwGieblerMapOffset) *dwGieblerMapOffset = iMapOffset;
+
+			// re-read first sectors so they appear correctly in ucReturnBuf
+			if(ucReturnBuf)
+			{
+				// read first byte of allocation map
+				SetFilePointer(h, iMapOffset, 0, FILE_BEGIN);
+				if(0==ReadFile(h, &ucFirstGieblerMap, 1, &dwBytesRead, NULL))
+				{
+					dwError = GetLastError();
+					LOG("failed: "); LOG_ERR(dwError);
+					return IMAGE_FILE_UNKNOWN;
+				}
+
+				memset(ucReturnBuf, 0, ID_SIZE);
+
+				// read 8 blocks one by one
+				iOffset = 512;
+				for(i=0; i<8; i++)
+				{
+					if(0==(ucFirstGieblerMap&(1<<(7-i))))
+					{
+						SetFilePointer(h, iOffset, 0, FILE_BEGIN);
+						ReadFile(h, ucReturnBuf+i*512, 512, &dwBytesRead, 0);
+						iOffset += 512;
+					}
+				}
+			}
+			
+			return IMAGE_FILE_GIEBLER;
+		}
+	}
+	
+	// Mode1-CDROM?
+	if((0x00==ucBuf[ 0])&&
+	   (0xFF==ucBuf[ 1])&&
+	   (0xFF==ucBuf[ 2])&&
+	   (0xFF==ucBuf[ 3])&&
+	   (0xFF==ucBuf[ 4])&&
+	   (0xFF==ucBuf[ 5])&&
+	   (0xFF==ucBuf[ 6])&&
+	   (0xFF==ucBuf[ 7])&&
+	   (0xFF==ucBuf[ 8])&&
+	   (0xFF==ucBuf[ 9])&&
+	   (0xFF==ucBuf[10])&&
+	   (0x00==ucBuf[11]))
+	{
+		if(('I'==ucBuf[ 38+512*1+16])&&('D'==ucBuf[ 39+512*1+16])&&
+		   ('O'==ucBuf[ 28+512*2+16])&&('S'==ucBuf[ 29+512*2+16])&&
+		   ('D'==ucBuf[510+2352+16])&&('R'==ucBuf[511+2352+16])&&
+		   ('F'==ucBuf[510+2352+512*1+16])&&
+		   ('B'==ucBuf[511+2352+512*1+16]))
+		{		
+			LOG("File identified as Mode1CD.\n");
+			
+			// re-read first sectors so they appear correctly 
+			// in ucReturnBuf
+			if(ucReturnBuf)
+			{
+				LOG("Re-reading header: ");
+				for(i=0; i<8; i++)
+				{
+					SetFilePointer(h, (i>>2)*2352+16+((i&0x03)*512), 
+						0, FILE_BEGIN);
+					if(0==ReadFile(h, ucReturnBuf+i*512, 512, &dwBytesRead, 0))
+					{
+						dwError = GetLastError();
+						LOG("failed: "); LOG_ERR(dwError);
+						return IMAGE_FILE_UNKNOWN;
+					}
+				}
+				LOG("OK.\n");
+			}
+			
+			return IMAGE_FILE_MODE1;
+		}
+	}
+
+	// ISO?
+	if(('I'==ucBuf[ 38+512*1])&&('D'==ucBuf[ 39+512*1])&&
+	   ('O'==ucBuf[ 28+512*2])&&('S'==ucBuf[ 29+512*2])&&
+	   ('D'==ucBuf[510+512*4])&&('R'==ucBuf[511+512*4])&&
+	   ('F'==ucBuf[510+512*5])&&('B'==ucBuf[511+512*5]))
+	{
+		LOG("File identified as ISO image.\n");
+		
+		// re-read first sectors to ucReturnBuf
+		if(ucReturnBuf)
+		{
+			LOG("Re-reading header: ");
+			SetFilePointer(h, 0, 0, FILE_BEGIN);
+			if(0==ReadFile(h, ucReturnBuf, ID_SIZE, &dwBytesRead, 0))
+			{
+				dwError = GetLastError();
+				LOG("failed: "); LOG_ERR(dwError);
+				return IMAGE_FILE_UNKNOWN;
+			}
+			LOG("OK.\n");
+		}
+		if(dwDataOffset) *dwDataOffset = 0;
+		
+		return IMAGE_FILE_ISO;
+	}
+	
+	return IMAGE_FILE_UNKNOWN;
+}
+
 
 //----------------------------------------------------------------------------
 // FreeDiskList
@@ -1516,6 +1722,7 @@ DLLEXPORT void __stdcall FreeDiskList(int iShowProgress, DISK *pRoot)
 		if(pDisk->ucCacheFlags) free(pDisk->ucCacheFlags);
 		if(pDisk->dwCacheAge) free(pDisk->dwCacheAge);
 		if(pDisk->ucCache) free(pDisk->ucCache);
+		if(pDisk->ucGieblerMap) free(pDisk->ucGieblerMap);
 		if(pDisk->hHandle!=INVALID_HANDLE_VALUE)
 		{
 			if(TYPE_FLOPPY==pDisk->iType)

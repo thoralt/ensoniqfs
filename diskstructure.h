@@ -62,6 +62,9 @@ typedef struct _DISK
 	HANDLE hHandle;			// handle for direct access
 	int iType;				// TYPE_DISK | TYPE_CDROM | TYPE_FILE | TYPE_FLOPPY
 	int iImageType;			// subtype if disk is an image file
+	DWORD dwDataOffset;		// for image files: offset of data in image file
+	unsigned char *ucGieblerMap;	// for Giebler images only
+	DWORD dwGieblerMapOffset;
 	unsigned char *ucCache;	// pointer to cache memory
 	DWORD *dwCacheTable;	// which blocks are in cache?
 	DWORD *dwCacheAge;		// the age of each cache entry

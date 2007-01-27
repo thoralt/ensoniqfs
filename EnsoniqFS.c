@@ -1387,8 +1387,8 @@ void AddToImageList(char *cName)
 			// next section found?
 			if('['==pLine->cLine[0]) break;
 		
-			iImageFileCounter++;	
-			if(0==strcmp(pLine->cLine, cText))
+			if(0==strncmp(pLine->cLine, "image=", 6)) iImageFileCounter++;	
+			if(0==strncmp(pLine->cLine, cText, strlen(cText)))
 			{
 				MessageBoxA(0, "This file is already in the list of image "
 					"files.\nIt can not be mounted twice.",

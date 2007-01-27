@@ -61,7 +61,9 @@ int ReadBlock(DISK *pDisk, DWORD dwBlock, unsigned char *ucBuf);
 int GetContiguousBlocks(DISK *pDisk, DWORD dwNumBlocks);
 int GetNextFreeBlock(DISK *pDisk, int iStartingBlock);
 int AdjustFreeBlocks(DISK *pDisk, int iAdjust);
-
+int DetectImageFileType(HANDLE h, unsigned char *ucReturnBuf, 
+	DWORD *dwDataOffset, DWORD *dwGieblerMapOffset);
+	
 //----------------------------------------------------------------------------
 // DLL exports
 //----------------------------------------------------------------------------
