@@ -1317,26 +1317,45 @@ void AddToImageList(char *cName)
 	INI_LINE *pIniFile = 0, *pLine, *pTempLine = 0;
 	int iImageFileCounter = 0;
 	char cText[512];
+	DWORD dwError;
+	HANDLE h;
 	
-/*
-	// check if this is a supported image file format
-	iFormat = CheckImageFile(f);
-	if(IMAGE_FILE_UNKNOWN==iFormat)
+	// open image file for type detection
+	LOG("Opening file for type detection: ");
+	h = CreateFile(cName, FILE_ALL_ACCESS, FILE_SHARE_READ | FILE_SHARE_WRITE, 
+		NULL, OPEN_EXISTING, 0, NULL);
+	if(INVALID_HANDLE_VALUE==h)
 	{
+		dwError = GetLastError();
+		LOG("failed: "); LOG_ERR(dwError);
+		
+		MessageBoxA(0, "Could not open file.", "EnsoniqFS · Error", 
+			MB_OK | MB_ICONSTOP);
+		return;
+	}
+	LOG("OK.\n");
+
+	// check image file format
+	if(IMAGE_FILE_UNKNOWN==DetectImageFileType(h, NULL, NULL, NULL))
+	{
+		LOG("Image format unknown.\n");
+		
 		MessageBoxA(0, "The format of the image file could not be "
 			"determined. Only the \n"
 			"following types are supported:\n\n"
 			"    · ISO format (plain disk image)\n"
-			"    · CDROM Mode1 format\n"
-			"    · GKH format\n"
-			"    · Giebler disk image (EDE, EDA, EDT)\n\n"
+			"    · BIN format (CDROM Mode1)\n"
+			"    · GKH format (Epsread/Epswrite)\n"
+			"    · Giebler disk image (EDE, EDA, EDT, EDV)\n\n"
 			"Additionally, the image file must contain a valid Ensoniq "
 			"file\nsystem for EnsoniqFS to be able to mount it.",
-			"EnsoniqFS · Warning", MB_ICONWARNING);
-		fclose(f);
-		return FS_FILE_OK;
+			"EnsoniqFS · Error", MB_ICONSTOP);
+		CloseHandle(h);
+		return;
 	}
-*/
+	
+	CloseHandle(h);
+
 	// open ini file, parse, write new entry, rescan devices
 	LOG("Reading INI file: ");
 	if(ERR_OK!=ReadIniFile(g_DefaultParams.DefaultIniName, &pIniFile))
