@@ -37,7 +37,7 @@
 #include <windows.h>
 #include "log.h"
 
-#ifdef LOGGING
+extern int g_iOptionEnableLogging;
 
 //----------------------------------------------------------------------------
 // LOG
@@ -50,6 +50,7 @@
 //----------------------------------------------------------------------------
 void LOG(char *c)
 {
+	if(!g_iOptionEnableLogging) return;
 	FILE *pDebug;
 	pDebug = fopen(LOGFILE, "a+");
 	if(NULL==pDebug) return;
@@ -68,6 +69,7 @@ void LOG(char *c)
 //----------------------------------------------------------------------------
 void LOG_HEX8(int i)
 {
+	if(!g_iOptionEnableLogging) return;
 	char cBuf[16];
 	sprintf(cBuf, "0x%08X", i);
 	LOG(cBuf);
@@ -84,6 +86,7 @@ void LOG_HEX8(int i)
 //----------------------------------------------------------------------------
 void LOG_HEX2(int i)
 {
+	if(!g_iOptionEnableLogging) return;
 	char cBuf[16];
 	sprintf(cBuf, "0x%02X", i);
 	LOG(cBuf);
@@ -100,6 +103,7 @@ void LOG_HEX2(int i)
 //----------------------------------------------------------------------------
 void LOG_INT(int i)
 {
+	if(!g_iOptionEnableLogging) return;
 	char cBuf[16];
 	sprintf(cBuf, "%i", i);
 	LOG(cBuf);
@@ -116,6 +120,7 @@ void LOG_INT(int i)
 //----------------------------------------------------------------------------
 void LOG_ERR(unsigned int dwError)
 {
+	if(!g_iOptionEnableLogging) return;
 	char *lpMsgBuf;
 
 	FormatMessage(
@@ -126,4 +131,3 @@ void LOG_ERR(unsigned int dwError)
 	LOG(lpMsgBuf); LocalFree(lpMsgBuf);
 	LOG(" (code="); LOG_HEX8(dwError); LOG(")\n");
 }
-#endif

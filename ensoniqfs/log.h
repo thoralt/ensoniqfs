@@ -36,12 +36,6 @@
 #define _LOG_H_
 
 //----------------------------------------------------------------------------
-// logging on/off
-//----------------------------------------------------------------------------
-// If you want to have logging built in, uncomment the line below
-//#define LOGGING 1
-
-//----------------------------------------------------------------------------
 // logfile
 //----------------------------------------------------------------------------
 #define LOGFILE	"C:\\EnsoniqFS-LOG.txt"
@@ -49,19 +43,10 @@
 //----------------------------------------------------------------------------
 // Prototypes
 //----------------------------------------------------------------------------
-#ifdef LOGGING
-	void LOG(char *c);
-	void LOG_HEX8(int i);
-	void LOG_HEX2(int i);
-	void LOG_INT(int i);
-	void LOG_ERR(unsigned int dwError);
-#else
-	#define LOG(x)		{}
-	#define LOG_HEX8(x) {}
-	#define LOG_HEX2(x) {}
-	#define LOG_INT(x) 	{}
-	#define LOG_ERR(x) 	{}
-#endif
-
+void LOG(char *c);
+void LOG_HEX8(int i);
+void LOG_HEX2(int i);
+void LOG_INT(int i);
+void LOG_ERR(unsigned int dwError);
 #endif
 

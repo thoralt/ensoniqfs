@@ -54,6 +54,7 @@ extern int g_iOptionEnableCDROM;
 extern int g_iOptionEnableImages;
 extern int g_iOptionEnablePhysicalDisks;
 extern int g_iOptionAutomaticRescan;
+extern int g_iOptionEnableLogging;
 
 //----------------------------------------------------------------------------
 // GetShortEnsoniqFiletype
@@ -1342,6 +1343,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 						  (ucBuf[15+512]<<16) + (ucBuf[14+512]<<24);
 
 		// set physical disk values to logical values from DeviceID block
+		// for floppy or use file size for image files
 		if((TYPE_FLOPPY==iType)||(TYPE_FILE==iType))
 		{
 			__int64 ii = 0;
