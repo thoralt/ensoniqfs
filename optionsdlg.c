@@ -59,6 +59,7 @@ extern int g_iOptionEnableCDROM;
 extern int g_iOptionEnableImages;
 extern int g_iOptionEnablePhysicalDisks;
 extern int g_iOptionAutomaticRescan;
+extern int g_iOptionEnableLogging;
 
 int m_iDeviceListChanged = 0;
 
@@ -107,6 +108,9 @@ void OptionsDlg_OnOK(HWND hWnd)
 	g_iOptionAutomaticRescan = 
 		(SendMessage(GetDlgItem(hWnd, IDC_CHK_RESCAN),
 		(UINT)BM_GETCHECK, (WPARAM)0, (LPARAM)0)==BST_CHECKED)?1:0;
+	g_iOptionEnableLogging = 
+		(SendMessage(GetDlgItem(hWnd, IDC_CHK_LOGGING),
+		(UINT)BM_GETCHECK, (WPARAM)0, (LPARAM)0)==BST_CHECKED)?1:0;
 
 	SetIniValueInt(cName, "[EnsoniqFS]", "EnableFloppy", 
 		g_iOptionEnableFloppy);
@@ -122,6 +126,9 @@ void OptionsDlg_OnOK(HWND hWnd)
 
 	SetIniValueInt(cName, "[EnsoniqFS]", "AutomaticRescan", 
 		g_iOptionAutomaticRescan);
+
+	SetIniValueInt(cName, "[EnsoniqFS]", "EnableLogging", 
+		g_iOptionEnableLogging);
 
 	if(m_iDeviceListChanged)
 	{
@@ -222,8 +229,8 @@ void OptionsDlg_ParseImageFiles(HWND hWnd)
 void OptionsDlg_MountImage(HWND hWnd)
 {
 	char cFilter[] = "All supported image files (*.iso;*.bin;*.gkh;*.ed?)|"
-		"*.iso;*.bin;*.gkh;*.ed?|"
-		"ISO images (*.iso)|*.iso|"
+		"*.iso;*.bin;*.gkh;*.ed?;*.img|"
+		"ISO images (*.iso;*.img)|*.iso;*.img|"
 		"BIN images (*.bin)|*.bin|"
 		"Epsread/Epswrite images (*.gkh)|*.gkh|"
 		"Giebler images (*.ed?)|*.ed?|"
@@ -389,6 +396,10 @@ void OptionsDlg_OnInitDialog(HWND hWnd)
 	SendMessage(GetDlgItem(hWnd, IDC_CHK_RESCAN),
 		(UINT)BM_SETCHECK, 
 		(WPARAM)(g_iOptionAutomaticRescan?BST_CHECKED:BST_UNCHECKED), 
+		(LPARAM)0);
+	SendMessage(GetDlgItem(hWnd, IDC_CHK_LOGGING),
+		(UINT)BM_SETCHECK, 
+		(WPARAM)(g_iOptionEnableLogging?BST_CHECKED:BST_UNCHECKED), 
 		(LPARAM)0);
 }
 

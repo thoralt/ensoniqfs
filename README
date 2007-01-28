@@ -160,7 +160,13 @@ directory of EnsoniqFS. This causes a delay, a progress dialog will be shown.
 If you do not want EnsoniqFS to rescan that often, you should disable this
 checkbox. You can update the device list manually (see below).
 
-Mounting/unmounting image files
+[ ] Enable logging to C:\EnsoniqFS-LOG.txt
+If you activate this option, the EnsoniqFS plugin will create a log file at
+yor C: drive. EnsoniqFS will then write extensive logging information to this
+file. This logging information can come handy for the developer if you've found
+some bug. Note: activating this option slows down EnsoniqFS, and the log file
+can grow quite fast to megabytes.
+
 
 If you select an image file from the dropdown box at the bottom of the options
 dialog, you can click on the "Unmount selected image" button to remove that

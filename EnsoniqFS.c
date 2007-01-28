@@ -76,6 +76,7 @@ int g_iOptionEnableCDROM = 1;
 int g_iOptionEnableImages = 1;
 int g_iOptionEnablePhysicalDisks = 1;
 int g_iOptionAutomaticRescan = 1;
+int g_iOptionEnableLogging = 0;
 
 // flag for operations on multiple files to flush the cache only once after
 // the last file
@@ -370,10 +371,20 @@ int ReadDirectory(DISK *pDisk, ENSONIQDIR *pDir)
 	if(ERR_OK!=iResult) return iResult;
 
 	// loop through all entries
+//	LOG("\n");
 	for(i=0; i<39; i++)
 	{
 		pDir->Entry[i].ucType = pDir->ucDirectory[i*26+1];
-
+/*
+		// debug output
+		LOG("Directory entry #"); LOG_HEX2(i); LOG(": ");
+		for(j=0; j<26; j++) 
+		{
+			LOG_HEX2(pDir->ucDirectory[i*26+j]);
+			LOG(" ");
+		}
+		LOG("\n");
+*/		
 		// check type
 		if(0x00==pDir->ucDirectory[i*26+1]) continue; // skip blank entries
 		if(0x08==pDir->ucDirectory[i*26+1]) continue; // skip link to parent
@@ -2078,7 +2089,7 @@ DLLEXPORT BOOL __stdcall FsMkDir(char* Path)
 	// name = back to current directory
 	for(i=0; i<12; i++) ucNewDir[i+2] = cCurrentDir[i];
 	ucNewDir[14] = 0x00;
-	ucNewDir[15] = 0x02;	// file size of current dir (does not matter)
+	ucNewDir[15] = 0x00;	// file size of current dir (does not matter)
 	ucNewDir[16] = 0x00;
 	ucNewDir[17] = 0x02;	// contiguous blocks of current dir
 	
@@ -2254,6 +2265,8 @@ DLLEXPORT void __stdcall FsSetDefaultParams(FsDefaultParamStruct* dps)
 	g_iOptionEnableImages = (cValue[0]=='0')?0:1;
 	GetIniValue(cName, "[EnsoniqFS]", "AutomaticRescan", cValue, 2, "1");
 	g_iOptionAutomaticRescan = (cValue[0]=='0')?0:1;
+	GetIniValue(cName, "[EnsoniqFS]", "EnableLogging", cValue, 2, "0");
+	g_iOptionEnableLogging = (cValue[0]=='0')?0:1;
 }
 
 //----------------------------------------------------------------------------
