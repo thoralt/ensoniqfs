@@ -115,12 +115,13 @@ same way as you do with Windows files and folders.
 
 4.1.2 Image files
 
-Initially, the image folder is empty. To add a new image file, go to the other
-tab of Total Commander and browse to an image file you want to mount. Press 
-<F5> to copy it to the image file folder. It will be mounted and you can browse
-it. Another way of adding (and removing) image files is through the "Options" 
-dialog, see 4.1.4. The "Options" dialog also is the only method to unmount an
-image file.
+Initially, the image folder is empty. To add and remove image files, go one
+level up to the main directory of EnsoniqFS and call the "Options" dialog
+(see 4.1.4). 
+
+Once an image is mounted, it should show up in the "Image files" folder. You
+can browse it with Total Commander the same way as you do with other folders
+and files.
 
 Note: Having many images mounted can be a real memory eater. For each image
 file a cache and lots of other data structures are created. So be sure to

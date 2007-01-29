@@ -1540,6 +1540,13 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 //............................................................................
 // add image file to list
 //............................................................................
+
+/*
+	This has been disabled because sometimes it was not possible to mount an
+	image (unable to open file, file in use). Source of the problem was not
+	found, and since using the options dialog to mount/unmount images is not
+	that complicated, this code will stay inactive until further notice.
+
 	// should this file be treated as an image file which is to be added to
 	// the image file list?
 	if(0==strcmp(Handle.cPath, "\\Image files"))
@@ -1564,6 +1571,7 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 		g_pDiskListRoot = ScanDevices(0);
 		return FS_FILE_OK;
 	}
+*/
 
 //............................................................................
 // put Ensoniq file to disk
