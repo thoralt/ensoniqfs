@@ -103,8 +103,8 @@ all your drives. This may take a few seconds (a progress dialog will be shown).
 After that, you'll see three folders: "CDROMs", "Image files" and "Physical
 disks".
 
-Along with that, you should see an entry "Options" and "Rescan devices" (see
-below for an explanation).
+Along with that, you should see entries "Options", "Rescan devices" and "Run
+Ensoniq Filesystem Tools" (see below for an explanation).
 
 4.1.1 CDROMs
 
@@ -183,7 +183,12 @@ You should do this if either your configuration changed (maybe you plugged in
 another SCSI disk or ZIP drive) or if you inserted new removable media into
 one of your devices.
 
-4.2 ETools
+4.1.5 Run Ensoniq Filesystem Tools
+
+Hit "Enter" on that item to start ETools, the Ensoniq Filesystem backup/
+restore/format/check/repair tool (see below for a description).
+
+4.2 Ensoniq Filesystem Tools (ETools)
 
 ETools is a piece of software which can do the following things for you:
 - completely backup an Ensoniq drive to an ISO file
