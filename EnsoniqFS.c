@@ -77,6 +77,7 @@ int g_iOptionEnableImages = 1;
 int g_iOptionEnablePhysicalDisks = 1;
 int g_iOptionAutomaticRescan = 1;
 int g_iOptionEnableLogging = 0;
+char g_cOptionInstallPath[261];
 
 // flag for operations on multiple files to flush the cache only once after
 // the last file
@@ -130,8 +131,8 @@ int ReadEnsoniqFile(DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, char *cDestFN,
 	FILE *f;
 	
 	LOG("Reading Ensoniq file (Start="); LOG_INT(pDirEntry->dwStart);
-	LOG(", size=");	LOG_INT(pDirEntry->dwLen); LOG(", type=");
-	LOG_INT(pDirEntry->ucType); LOG(" blocks), destination=\""); 
+	LOG(", size=");	LOG_INT(pDirEntry->dwLen); LOG("blocks, type=");
+	LOG_INT(pDirEntry->ucType); LOG("), destination=\""); 
 	LOG(cDestFN); LOG("\"\n");
 	
 	// check pointers
@@ -724,6 +725,10 @@ DLLEXPORT int __stdcall FsExtractCustomIcon(char* RemoteName,
 DLLEXPORT int __stdcall FsExecuteFile(HWND MainWin, char* RemoteName, 
 									  char* Verb)
 {
+	char cPath[260], cArg[260];
+	PROCESS_INFORMATION pi;
+	STARTUPINFO si;
+	
 	LOG("FsExecuteFile(MainWin="); LOG_HEX8((int)MainWin);
 	LOG(", RemoteName=\"");
 	LOG(RemoteName); LOG("\", Verb=\""); LOG(Verb); LOG("\"\n");
@@ -736,6 +741,34 @@ DLLEXPORT int __stdcall FsExecuteFile(HWND MainWin, char* RemoteName,
 	if((0==strcmp(RemoteName, "\\Rescan devices"))&&(0==strcmp(Verb, "open")))
 	{
 		FreeDiskList(1, g_pDiskListRoot);
+		g_pDiskListRoot = ScanDevices(0);
+	}
+
+	if((0==strcmp(RemoteName, "\\Run Ensoniq Filesystem Tools"))&&
+		(0==strcmp(Verb, "open")))
+	{
+		// free all devices so ETools can use them
+		FreeDiskList(1, g_pDiskListRoot);
+		
+		// call ETools
+		strcpy(cPath, g_cOptionInstallPath);
+		strcat(cPath, "\\ETools.exe");
+		memset(&pi, 0, sizeof(PROCESS_INFORMATION));
+		memset(&si, 0, sizeof(STARTUPINFO));
+		si.cb = sizeof(STARTUPINFO);
+		
+		if(0==CreateProcess(cPath, cArg, 0, 0, 0, 0, 0, 0, &si, &pi))
+		{
+			MessageBoxA(0, "Could not start ETools.exe.", "EnsoniqFS · Error",
+				MB_ICONSTOP);
+		}
+		else
+		{
+			// wait for process to terminate
+			while(WAIT_TIMEOUT==WaitForSingleObject(pi.hProcess, 100));
+		}
+		
+		// claim back device list
 		g_pDiskListRoot = ScanDevices(0);
 	}
 
@@ -757,7 +790,8 @@ DLLEXPORT BOOL __stdcall FsFindNext(HANDLE Handle, WIN32_FIND_DATA *FindData)
 						"dCDROMs\n"
 						"dImage files\n"
 						"fOptions\n"
-						"fRescan devices\n";
+						"fRescan devices\n"
+						"fRun Ensoniq Filesystem Tools\n";
 						
 	// check pointer
 	if(NULL==pHandle)
@@ -2253,6 +2287,8 @@ DLLEXPORT void __stdcall FsSetDefaultParams(FsDefaultParamStruct* dps)
 	cName = g_DefaultParams.DefaultIniName;
 
 	// parse INI file
+	GetIniValue(cName, "[EnsoniqFS]", "InstallPath", g_cOptionInstallPath, 
+		260, "?");
 	GetIniValue(cName, "[EnsoniqFS]", "EnableFloppy", cValue, 2, "1");
 	g_iOptionEnableFloppy = (cValue[0]=='0')?0:1;
 	GetIniValue(cName, "[EnsoniqFS]", "EnableCDROM", cValue, 2, "1");
