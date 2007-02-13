@@ -76,12 +76,18 @@ int g_iOptionEnableCDROM = 1;
 int g_iOptionEnableImages = 1;
 int g_iOptionEnablePhysicalDisks = 1;
 int g_iOptionAutomaticRescan = 1;
-int g_iOptionEnableLogging = 0;
+int g_iOptionEnableLogging = 1;
 char g_cOptionInstallPath[261];
 
 // flag for operations on multiple files to flush the cache only once after
 // the last file
 unsigned char g_ucMultiple = 0;
+
+// synchronization between multiple instances of EnsoniqFS
+const char g_cMemoryFN[] = "8EEA3415-4462-4f26-87BE-58ED9B9E5D86-EnsoniqFS";
+#define SHARED_MEMORY_SIZE	4096
+unsigned char *g_ucSharedMemory = NULL;
+HANDLE g_hMemoryMappedFile = INVALID_HANDLE_VALUE;
 
 //----------------------------------------------------------------------------
 // upcase
@@ -749,6 +755,9 @@ DLLEXPORT int __stdcall FsExecuteFile(HWND MainWin, char* RemoteName,
 	{
 		// free all devices so ETools can use them
 		FreeDiskList(1, g_pDiskListRoot);
+
+		// decrease reference counter
+		g_ucSharedMemory[0]--;
 		
 		// call ETools
 		strcpy(cPath, g_cOptionInstallPath);
@@ -767,6 +776,9 @@ DLLEXPORT int __stdcall FsExecuteFile(HWND MainWin, char* RemoteName,
 			// wait for process to terminate
 			while(WAIT_TIMEOUT==WaitForSingleObject(pi.hProcess, 100));
 		}
+
+		// increase reference counter
+		g_ucSharedMemory[0]++;
 		
 		// claim back device list
 		g_pDiskListRoot = ScanDevices(0);
@@ -2605,6 +2617,22 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 }
 
 //----------------------------------------------------------------------------
+// GetUsageCount
+//
+//----------------------------------------------------------------------------
+DLLEXPORT int __stdcall GetUsageCount(void)
+{
+	if(g_ucSharedMemory!=NULL)
+	{
+		LOG("GetUsageCount() returns "); 
+		LOG_INT(g_ucSharedMemory[0]); 
+		LOG("\n");
+		return g_ucSharedMemory[0];
+	}
+	else return 0;
+}
+
+//----------------------------------------------------------------------------
 // Cleanup
 //
 // -> --
@@ -2643,15 +2671,76 @@ BOOL APIENTRY DllMain (HINSTANCE hInst /*Library instance handle.*/,
                        DWORD reason    /*Reason why function is being called.*/,
                        LPVOID reserved /*Not used.*/ )
 {
+	DWORD dwError, dwInitSharedMemory = 0;
+	
     switch(reason)
     {
 		case DLL_PROCESS_ATTACH:
+			LOG("DllMain() DLL_PROCESS_ATTACH called.\n");
 			g_hInst = hInst;
+
+			// create memory mapped file
+			LOG("Creating memory mapped file: ");
+			g_hMemoryMappedFile = CreateFileMapping(
+				INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 
+				SHARED_MEMORY_SIZE, g_cMemoryFN);
+			
+			// check result
+			dwError = GetLastError();
+			if(NULL==g_hMemoryMappedFile)
+			{
+				LOG("failed ("); LOG_ERR(dwError); LOG(").\n");
+				break;
+			}
+			
+			LOG("OK.\n");
+			
+			// is this the first instance?
+			if(dwError!=ERROR_ALREADY_EXISTS)
+			{
+				dwInitSharedMemory = 1;
+				LOG("This is the first instance.\n");
+			}
+			
+			// get the buffer
+			g_ucSharedMemory = MapViewOfFile(g_hMemoryMappedFile, 
+				FILE_MAP_ALL_ACCESS, 0, 0, 0);
+			
+			// check result
+			LOG("Mapping file: ");
+			dwError = GetLastError();
+			if(NULL==g_ucSharedMemory)
+			{
+				CloseHandle(g_hMemoryMappedFile);
+				LOG("failed ("); LOG_ERR(dwError); LOG(").\n");
+				break;
+			}
+
+			LOG("OK.\n");
+
+			// if this is the first instance, delete shared memory block
+			if(1==dwInitSharedMemory)
+			{
+				memset(g_ucSharedMemory, 0, SHARED_MEMORY_SIZE);
+			}
+			
+			// increase reference counter
+			g_ucSharedMemory[0]++;
+
 	        break;
 
 		case DLL_PROCESS_DETACH:
 			// free all memory
+			LOG("DllMain() DLL_PROCESS_DETACH called.\n");
 			Cleanup();
+			
+			// decrease reference counter
+			g_ucSharedMemory[0]--;
+			
+			LOG("Unmapping file.\n");
+			UnmapViewOfFile(g_ucSharedMemory);
+			CloseHandle(g_hMemoryMappedFile);
+						
 	        break;
 
 		case DLL_THREAD_ATTACH:
@@ -2668,26 +2757,3 @@ BOOL APIENTRY DllMain (HINSTANCE hInst /*Library instance handle.*/,
 	// function (I do not want to disable this warning for the whole project)
 	reserved = reserved;
 }
-
-/*
-TODO:
-	
-WriteBlocks(), WriteBlocksUncached(), ReadBlocks(), ReadBlock(), ScanDevices():
-- support for image files other than ISO (GKH, EDE/EDT/EDA, Mode1CD)
-
-EnableExtendedFormats()
-- check return values from OmniFlop, notify user if (a) OmniFlop was not found
-  or (b) OmniFlop was not licensed
-
-CacheFlush()
-- rewrite the sorting routine (awful slow!)
-
-General:
-- add options dialog
-- add mount/unmount image files dialog
-
-DONE:
-CopyEnsoniqFile():
-- write non-contiguous files
-
-*/
