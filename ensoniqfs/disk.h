@@ -78,6 +78,7 @@ DLLEXPORT int __stdcall GetFATEntry(DISK *pDisk, DWORD dwBlock);
 DLLEXPORT int __stdcall SetFATEntry(DISK *pDisk, DWORD dwBlock,
 	DWORD dwNewValue);
 DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems);
+DLLEXPORT int __stdcall GetUsageCount(void);
 
 #endif
 
