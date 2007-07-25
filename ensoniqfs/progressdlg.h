@@ -41,5 +41,6 @@
 int DestroyProgressDialog();
 int CreateProgressDialog();
 void UpdateProgressDialog(char *cText, int iProgress);
+HWND GetProgressDialogHwnd(void);
 
 #endif
