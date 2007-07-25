@@ -737,7 +737,7 @@ DLLEXPORT int __stdcall FsExecuteFile(HWND MainWin, char* RemoteName,
 	
 	LOG("FsExecuteFile(MainWin="); LOG_HEX8((int)MainWin);
 	LOG(", RemoteName=\"");
-	LOG(RemoteName); LOG("\", Verb=\""); LOG(Verb); LOG("\"\n");
+	LOG(RemoteName); LOG("\", Verb=\""); LOG(Verb); LOG("\")\n");
 
 	if((0==strcmp(RemoteName, "\\Options"))&&(0==strcmp(Verb, "open")))
 	{

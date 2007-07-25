@@ -940,7 +940,8 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 	DWORD dwBytesRead, dwBytesReturned, dwError, fsl, fsh, dwDataOffset, 
 		dwGieblerMapOffset;
 	unsigned char *ucBuf = NULL, *ucBufUnaligned = NULL;
-	int i, iType, j, iIsEnsoniq = 0, iImageType = IMAGE_FILE_UNKNOWN,
+	int iDeviceNameIndex, iType, j, iIsEnsoniq = 0, 
+		iImageType = IMAGE_FILE_UNKNOWN,
 		iDeviceCounter, iMaxDevices;
 	INI_LINE *pLine, *pIniFile;
 	HANDLE h = INVALID_HANDLE_VALUE;
@@ -949,6 +950,9 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		"-------------\n");
 	LOG("QueryDosDevice():\n");
 	memset(cBuf, 0, BUF_SIZE);
+
+	// this call builds a list of all available devices (most of them not
+	// useful for us)
 	if(!QueryDosDevice(NULL, cBuf, BUF_SIZE))
 	{
 		LOG("FAILED.\n");
@@ -957,10 +961,15 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 
 	CreateProgressDialog();
 	
-	// find end of list
-	i=0; while((i<BUF_SIZE-2)&&(!((cBuf[i]==0)&&(cBuf[i+1]==0)))) i++;
-	LOG("End of QueryDosDevice() buffer: "); LOG_INT(i); LOG("\n");
-	i++;
+	// find end of list (the image files will be added there)
+	iDeviceNameIndex = 0;
+	while((iDeviceNameIndex<BUF_SIZE-2)&&
+		(!((cBuf[iDeviceNameIndex]==0)&&(cBuf[iDeviceNameIndex+1]==0))))
+			iDeviceNameIndex++;
+			
+	LOG("End of QueryDosDevice() buffer: "); LOG_INT(iDeviceNameIndex);
+	LOG("\n");
+	iDeviceNameIndex++;
 
 	// open ini file, parse, add image file entries to QueryList
 	LOG("Reading INI file: ");
@@ -1008,8 +1017,10 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 					
 					// add image file name to string list
 					j=0;
-					while(pLine->cLine[j]>31) cBuf[i++] = pLine->cLine[j++];
-					cBuf[i++] = 0;
+					while(pLine->cLine[j]>31)
+						cBuf[iDeviceNameIndex++] = pLine->cLine[j++];
+						
+					cBuf[iDeviceNameIndex++] = 0;
 				}
 				
 				pLine = pLine->pNext;
@@ -1019,23 +1030,26 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 	FreeIniLines(pIniFile);
 
 	// add final '\0' to end of string list
-	cBuf[i] = 0;
+	cBuf[iDeviceNameIndex] = 0;
 
 	// count devices (for proper progess reporting)
-	i = 0; iMaxDevices = 0;
-	while(cBuf[i])
+	iDeviceNameIndex = 0; iMaxDevices = 0;
+	while(cBuf[iDeviceNameIndex])
 	{
-		i += strlen(cBuf + i) + 1;
+		iDeviceNameIndex += strlen(cBuf + iDeviceNameIndex) + 1;
 		iMaxDevices++;
 	}
 	
-	i = 0; iDeviceCounter = 0;
-	while(cBuf[i])
+	// now loop through the device list and check each entry if it is a
+	// physical drive, CDROM, floppy or image file; then try to open the device
+	iDeviceNameIndex = 0; iDeviceCounter = 0;
+	while(cBuf[iDeviceNameIndex])
 	{
 		iDeviceCounter++;
 
 		// construct device name			
-		strcpy(cMsDosName, "\\\\.\\"); strcat(cMsDosName, cBuf + i);
+		strcpy(cMsDosName, "\\\\.\\");
+		strcat(cMsDosName, cBuf + iDeviceNameIndex);
 
 		if(0==strncmp(cMsDosName, "\\\\.\\image=", 10))
 		{
@@ -1044,41 +1058,63 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		else
 		{
 			// query long name
-			QueryDosDevice(cBuf + i, cLongName, BUF_SIZE);
+			QueryDosDevice(cBuf + iDeviceNameIndex, cLongName, BUF_SIZE);
 		}
 
-		i += strlen(cBuf + i) + 1;
+		iDeviceNameIndex += strlen(cBuf + iDeviceNameIndex) + 1;
 		
 		// check only physical drives, image files, floppies and CDROMs
 		if(0==strncmp(cMsDosName, "\\\\.\\PhysicalDrive", 17))
 		{
-			if(!g_iOptionEnablePhysicalDisks) continue;
+			if(!g_iOptionEnablePhysicalDisks)
+			{
+				LOG("Skipping "); LOG(cMsDosName); LOG(" (not enabled)\n");
+				continue;
+			}
 			iType = TYPE_DISK;
 		}
 		else if(0==strncmp(cMsDosName, "\\\\.\\CdRom", 9))
 		{
-			if(!g_iOptionEnableCDROM) continue;
+			if(!g_iOptionEnableCDROM)
+			{
+				LOG("Skipping "); LOG(cMsDosName); LOG(" (not enabled)\n");
+				continue;
+			}
 			iType = TYPE_CDROM;
 		}
 		else if(0==strncmp(cMsDosName, "\\\\.\\A:", 6))
 		{
-			if(!g_iOptionEnableFloppy) continue;
+			if(!g_iOptionEnableFloppy)
+			{
+				LOG("Skipping "); LOG(cMsDosName); LOG(" (not enabled)\n");
+				continue;
+			}
 			iType = TYPE_FLOPPY;
 		}
 		else if(0==strncmp(cMsDosName, "\\\\.\\B:", 6))
 		{
-			if(!g_iOptionEnableFloppy) continue;
+			if(!g_iOptionEnableFloppy)
+			{
+				LOG("Skipping "); LOG(cMsDosName); LOG(" (not enabled)\n");
+				continue;
+			}
 			iType = TYPE_FLOPPY;
 		}
 		else if(0==strncmp(cMsDosName, "\\\\.\\image=", 10))
 		{
-			if(!g_iOptionEnableImages) continue;
+			if(!g_iOptionEnableImages)
+			{
+				LOG("Skipping "); LOG(cMsDosName); LOG(" (not enabled)\n");
+				continue;
+			}
 			iType = TYPE_FILE;
 			for(j=10; j<(int)strlen(cMsDosName); j++) 
 				if('\\'==cMsDosName[j]) cMsDosName[j] = '/';
 		}
 		else
 		{
+			// skip everything else
+			LOG("Skipping "); LOG(cMsDosName); LOG(" (not supported)\n");
 			continue;
 		}
 
@@ -1111,13 +1147,17 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 				continue;
 			}
 
+			// open device
 			h = CreateFile(cMsDosName, FILE_ALL_ACCESS, 0,
 				NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+				
+			// lock device
 			DeviceIoControl(h, FSCTL_LOCK_VOLUME, NULL, 0, 
 							NULL, 0, &dwBytesReturned, NULL);
 		}
 		else if(TYPE_FILE==iType)
 		{
+			// open file
 			h = CreateFile(cMsDosName+10, FILE_ALL_ACCESS,
 				FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, 
 				OPEN_EXISTING, 0, NULL);
@@ -1145,6 +1185,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 			iImageType = DetectImageFileType(h, ucBuf, &dwDataOffset, 
 				&dwGieblerMapOffset);
 
+			// skip unknown image files
 			if(IMAGE_FILE_UNKNOWN==iImageType)
 			{
 				LOG("Warning: Unknown image file type. Skipping.\n");
@@ -1163,6 +1204,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 				LOG("failed: "); LOG_ERR(dwError);
 				if(TYPE_FLOPPY==iType)
 				{
+					// unlock device, close it, disable extended formats
 					DeviceIoControl(h, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0,
 									&dwBytesReturned, NULL);
 					CloseHandle(h);
@@ -1182,11 +1224,12 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 			LOG("not found, ");
 
 			// leave out this disk if only scanning for Ensoniq disks
-			if(0==dwAllowNonEnsoniqFilesystems)
+			if((0==dwAllowNonEnsoniqFilesystems)||(TYPE_FLOPPY==iType))
 			{
 				LOG("skipping.\n");
 				if(TYPE_FLOPPY==iType)
 				{
+					// unlock device, close it, disable extended formats
 					DeviceIoControl(h, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0,
 									&dwBytesReturned, NULL);
 					CloseHandle(h);
@@ -1215,6 +1258,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 			LOG("Unable to allocate new DISK structure.\n");
 			if(TYPE_FLOPPY==iType)
 			{
+				// unlock device, close it, disable extended formats
 				DeviceIoControl(h, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0,
 								&dwBytesReturned, NULL);
 				CloseHandle(h);
@@ -1242,6 +1286,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		// treat floppy and image files different (see below)
 		if((TYPE_FLOPPY!=iType)&&(TYPE_FILE!=iType))
 		{
+			LOG("Reading disk geometry: ");
 			if(0==DeviceIoControl(h, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX,
 								  NULL, 0, &(pDisk->DiskGeometry),
 								  sizeof(DISK_GEOMETRY_EX),
@@ -1262,6 +1307,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 			LOG("Unable to allocate cache memory.\n");
 			if(TYPE_FLOPPY==iType)
 			{
+				// unlock device, close it, disable extended formats
 				DeviceIoControl(h, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0,
 								&dwBytesReturned, NULL);
 				CloseHandle(h);
@@ -1278,6 +1324,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 			LOG("Unable to allocate cache table memory.\n");
 			if(TYPE_FLOPPY==iType)
 			{
+				// unlock device, close it, disable extended formats
 				DeviceIoControl(h, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0,
 								&dwBytesReturned, NULL);
 				CloseHandle(h);
@@ -1295,6 +1342,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 			LOG("Unable to allocate cache age memory.\n");
 			if(TYPE_FLOPPY==iType)
 			{
+				// unlock device, close it, disable extended formats
 				DeviceIoControl(h, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0,
 								&dwBytesReturned, NULL);
 				CloseHandle(h);
@@ -1313,6 +1361,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 			LOG("Unable to allocate cache flags memory.\n");
 			if(TYPE_FLOPPY==iType)
 			{
+				// unlock device, close it, disable extended formats
 				DeviceIoControl(h, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0,
 								&dwBytesReturned, NULL);
 				CloseHandle(h);
@@ -1403,8 +1452,8 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		// read Giebler allocation bitmap
 		if((TYPE_FILE==iType)&&(IMAGE_FILE_GIEBLER==iImageType))
 		{
-			i = (dwGieblerMapOffset==0x60)?400:200;
-			pDisk->ucGieblerMap = malloc(i);
+			j = (dwGieblerMapOffset==0x60)?400:200;
+			pDisk->ucGieblerMap = malloc(j);
 			if(NULL==pDisk->ucGieblerMap)
 			{
 				LOG("Error allocating Giebler map.\n");
@@ -1418,7 +1467,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 			}
 			
 			SetFilePointer(h, dwGieblerMapOffset, 0, FILE_BEGIN);
-			if(0==ReadFile(h, pDisk->ucGieblerMap, i, &dwBytesRead, NULL))
+			if(0==ReadFile(h, pDisk->ucGieblerMap, j, &dwBytesRead, NULL))
 			{
 				dwError = GetLastError();
 				LOG("Error reading Giebler map: "); LOG_ERR(dwError);
@@ -1760,11 +1809,6 @@ DLLEXPORT void __stdcall FreeDiskList(int iShowProgress, DISK *pRoot)
 //----------------------------------------------------------------------------
 BOOL EnableExtendedFormats(const char *szDrive, BOOL bEnable)
 {
-
-// TODO: report failure to load to user (either OmniFlop not installed or
-//       no license available)
-//       Allow user to avoid this warning in the future
-
 	DWORD nBytesReturned, dwError;
 	BOOL status;
 	
@@ -1808,6 +1852,29 @@ BOOL EnableExtendedFormats(const char *szDrive, BOOL bEnable)
 		dwError = GetLastError();
 		LOG("DeviceIoControl() failed: "); LOG_ERR(dwError);
 		CloseHandle(hMedia);
+
+		if(ERROR_INVALID_FUNCTION==dwError)
+		{
+			MessageBoxA(GetProgressDialogHwnd(),
+				"The OmniFlop driver could not be found.\n"
+				"If you want to use floppy disk access, you need\n"
+				"to install OmniFlop (see the readme file for how\n"
+				"to do this.\n\n"
+				"Alternatively, you can disable floppy disk access\n"
+				"in the options dialog to suppress this warning.", 
+				"EnsoniqFS · Warning", MB_OK|MB_ICONEXCLAMATION);
+		}
+
+		if(ERROR_ACCESS_DENIED==dwError)
+		{
+			MessageBoxA(GetProgressDialogHwnd(),
+				"The OmniFlop driver is missing a valid\n"
+				"license. Please see the readme file for how to\n"
+				"obtain this license (it's free and takes only\n"
+				"a few minutes).",
+				"EnsoniqFS · Warning", MB_OK|MB_ICONEXCLAMATION);
+		}
+
 		return FALSE;
 	}
 

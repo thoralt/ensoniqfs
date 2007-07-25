@@ -6,7 +6,7 @@ README
 2 Where to get it
 3 Installation
 4 Using EnsoniqFS
-5 Bugs
+5 Bugs and contact
 6 License
 7 Disclaimer
 
@@ -65,7 +65,7 @@ disk driver. If you do not plan using floppies, then you can leave out this
 step. The EnsoniqFS plugin will also work without this driver (you're then
 limited to the usage of image files and SCSI disks).
 
-First, get the driver from here (be sure you get the latest version, 2.01k 
+First, get the driver from here (be sure you get the latest version, 2.01m 
 minimum):
 http://www.shlock.co.uk/Utils/OmniFlop/OmniFlop.htm
 
@@ -208,11 +208,13 @@ partition backup, only the space which is allocated by the Ensoniq file system
 will be written to an ISO file. This could be useful if you formatted a big
 drive to a lower capacity and don't want to have a huge full drive backup.
 
-5 Bugs
+5 Bugs and contact
 
 If you find any bugs, please don't hesitate to tell us! To keep the best
 overview, I ask you to file a bug report on the SourceForge page of this
-project if you find something odd.
+project if you find something odd. You can also directly send a mail to
+ensoniqfs/at/thoralt.de (substitute /at/ with @ to get a valid email address,
+this is to prevent spam bots from collecting this address).
 
 6 License
 

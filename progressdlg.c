@@ -207,6 +207,19 @@ int CreateProgressDialog()
 }
 
 //----------------------------------------------------------------------------
+// GetProgressDialogHwnd
+// 
+// Reads the window handle of the dialog
+//
+// -> --
+// <- window handle or NULL
+//----------------------------------------------------------------------------
+HWND GetProgressDialogHwnd(void)
+{
+	return m_hProgressWnd;
+}
+
+//----------------------------------------------------------------------------
 // DestroyProgressDialog
 // 
 // Destroy the progress dialog
