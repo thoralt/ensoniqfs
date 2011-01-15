@@ -492,8 +492,7 @@ int CreateOptionsDialogModal(HWND hParent)
 	}
 	else
 	{
-		LOG("Dialog closed, return value="); LOG_INT(iResult);
-		LOG(".\n");
+		LOG("Dialog closed, return value=%d.\n", iResult);
 	}
 
 	return ERR_OK;

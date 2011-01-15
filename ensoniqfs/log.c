@@ -48,65 +48,21 @@ extern int g_iOptionEnableLogging;
 // -> *c = pointer to null terminated string to append to log file
 // <- --
 //----------------------------------------------------------------------------
-void LOG(char *c)
+void LOG(const char *format, ...)
 {
+	va_list args;
+	char cBuffer[2048];
+
 	if(!g_iOptionEnableLogging) return;
+
+	va_start(args, format);
+	vsprintf(cBuffer, format, args);
+	
 	FILE *pDebug;
 	pDebug = fopen(LOGFILE, "a+");
 	if(NULL==pDebug) return;
-	fprintf(pDebug, c);
+	fprintf(pDebug, cBuffer);
 	fclose(pDebug);
-}
-
-//----------------------------------------------------------------------------
-// LOG_HEX8
-// 
-// Append hexadecimal number to logfile (format: 0x12345678)
-// logfile is created if it doesn't exist
-// 
-// -> i = number to log as hex
-// <- --
-//----------------------------------------------------------------------------
-void LOG_HEX8(int i)
-{
-	if(!g_iOptionEnableLogging) return;
-	char cBuf[16];
-	sprintf(cBuf, "0x%08X", i);
-	LOG(cBuf);
-}
-
-//----------------------------------------------------------------------------
-// LOG_HEX2
-// 
-// Append hexadecimal number to logfile (format: 0x12)
-// logfile is created if it doesn't exist
-// 
-// -> i = number to log as hex
-// <- --
-//----------------------------------------------------------------------------
-void LOG_HEX2(int i)
-{
-	if(!g_iOptionEnableLogging) return;
-	char cBuf[16];
-	sprintf(cBuf, "0x%02X", i);
-	LOG(cBuf);
-}
-
-//----------------------------------------------------------------------------
-// LOG_INT
-// 
-// Append decimal number to logfile
-// logfile is created if it doesn't exist
-// 
-// -> i = number to log
-// <- --
-//----------------------------------------------------------------------------
-void LOG_INT(int i)
-{
-	if(!g_iOptionEnableLogging) return;
-	char cBuf[16];
-	sprintf(cBuf, "%i", i);
-	LOG(cBuf);
 }
 
 //----------------------------------------------------------------------------
@@ -129,5 +85,5 @@ void LOG_ERR(unsigned int dwError)
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		(LPTSTR) &lpMsgBuf, 0, NULL);
 	LOG(lpMsgBuf); LocalFree(lpMsgBuf);
-	LOG(" (code="); LOG_HEX8(dwError); LOG(")\n");
+	LOG(" (code=0x%08X)\n", dwError);
 }

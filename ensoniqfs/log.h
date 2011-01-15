@@ -43,10 +43,7 @@
 //----------------------------------------------------------------------------
 // Prototypes
 //----------------------------------------------------------------------------
-void LOG(char *c);
-void LOG_HEX8(int i);
-void LOG_HEX2(int i);
-void LOG_INT(int i);
+void LOG(const char *format, ...);
 void LOG_ERR(unsigned int dwError);
 #endif
 

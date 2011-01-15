@@ -340,8 +340,8 @@ DLLEXPORT int __stdcall CacheFlush(DISK *pDisk)
 			return ERR_WRITE;
 		}
 
-		LOG("  -> "); LOG_INT(j); LOG(" contiguous blocks written at block ");
-		LOG_INT(pDisk->dwCacheTable[i]); LOG(".\n");
+		LOG("  -> %d contiguous blocks written at block %d.\n", j, 
+			pDisk->dwCacheTable[i]);
 		
 		// mark cache blocks as non-dirty
 		for(k=0; k<j; k++) pDisk->ucCacheFlags[i+k] = CACHE_FLAG_NONE;
@@ -349,11 +349,9 @@ DLLEXPORT int __stdcall CacheFlush(DISK *pDisk)
 		i += j - 1;
 	}
 
-	LOG("OK, cache hits="); LOG_INT(pDisk->dwCacheHits);
-	LOG(", cache misses="); LOG_INT(pDisk->dwCacheMisses);
-	LOG(", FAT hits="); LOG_INT(pDisk->dwFATHit);
-	LOG(", FAT misses="); LOG_INT(pDisk->dwFATMiss);
-	LOG("\n");
+	LOG("OK, cache hits=%d, cache misses=%d, FAT hits=%d, FAT misses=%d\n", 
+		pDisk->dwCacheHits, pDisk->dwCacheMisses, pDisk->dwFATHit,
+		pDisk->dwFATMiss);
 	
 	return ERR_OK;
 }

@@ -47,11 +47,18 @@ typedef struct _ENSONIQDIRENTRY
 	DWORD dwContiguous, dwStart, dwLen;
 } ENSONIQDIRENTRY;
 
+typedef struct _VIRTUALWAVEFILE
+{
+	char cName[13], cLegalName[13];
+	DWORD dwContiguous, dwStart, dwLen;
+} VIRTUALWAVEFILE;
+
 typedef struct _ENSONIQDIR
 {
 	ENSONIQDIRENTRY Entry[39];
 	unsigned char ucDirectory[1024];
 	DWORD dwDirectoryBlock;
+	VIRTUALWAVEFILE VirtualWaveEntry[39];	
 } ENSONIQDIR;
 
 //----------------------------------------------------------------------------
