@@ -93,8 +93,11 @@ void GetShortEnsoniqFiletype(unsigned char ucType, char *cType)
 		case 0x05:
 		case 0x19:
 		case 0x1C:
-		case 0x1F:
 			strcpy(cType, "Sequence     ");
+			break;
+
+		case 0x1F:
+			strcpy(cType, "Audio Track  ");
 			break;
 
 		case 0x09:
@@ -163,7 +166,7 @@ int GetContiguousBlocks(DISK *pDisk, DWORD dwNumBlocks)
 	int iBlock;
 
 	iRecursiveCounter++;
-	LOG("GetContiguousBlocks("); LOG_INT(dwNumBlocks); LOG("): ");
+	LOG("GetContiguousBlocks(%d): ", dwNumBlocks);
 	
 	// loop through all FAT entries	
 	for(i=pDisk->dwLastFreeFATEntry; i<pDisk->dwBlocks; i++)
@@ -777,8 +780,8 @@ DLLEXPORT int __stdcall GetFATEntry(DISK *pDisk, DWORD dwBlock)
 		
 		if((pDisk->ucFATCache[510]!='F')||(pDisk->ucFATCache[511]!='B'))
 		{
-			LOG("Warning: Missing FAT block signature in block ");
-			LOG_INT(dwBlock/170 + 5); LOG(".\n");
+			LOG("Warning: Missing FAT block signature in block %d.\n",
+				dwBlock/170 + 5);
 		}
 	}
 	else
@@ -820,13 +823,13 @@ int AdjustFreeBlocks(DISK *pDisk, int iAdjust)
 	
 	if(0==iAdjust) return ERR_OK;
 	
-	LOG("Adjusting free blocks ("); LOG_INT(iAdjust); LOG("): ");
+	LOG("Adjusting free blocks (%d): ", iAdjust); 
 	
 	// read OS block
 	iResult = ReadBlock(pDisk, 2, ucBuf);
 	if(ERR_OK!=iResult)
 	{
-		LOG("read failed, code="); LOG_INT(iResult); LOG(".\n");
+		LOG("read failed, code=%d.\n", iResult);
 		return iResult;
 	}
 	
@@ -836,9 +839,8 @@ int AdjustFreeBlocks(DISK *pDisk, int iAdjust)
 			    + (ucBuf[2]<<8)
 			    + (ucBuf[3]);
 
-	LOG("before="); LOG_INT(iFreeBlocks);
+	LOG("before=%d, after=%d", iFreeBlocks, iFreeBlocks-iAdjust);
 	iFreeBlocks -= iAdjust; pDisk->dwBlocksFree = iFreeBlocks;
-	LOG(", after="); LOG_INT(iFreeBlocks);
 	
 	ucBuf[0] = (iFreeBlocks>>24) & 0xFF;
 	ucBuf[1] = (iFreeBlocks>>16) & 0xFF;
@@ -849,7 +851,7 @@ int AdjustFreeBlocks(DISK *pDisk, int iAdjust)
 	iResult = WriteBlocks(pDisk, 2, 1, ucBuf);
 	if(ERR_OK!=iResult)
 	{
-		LOG(", write failed, code="); LOG_INT(iResult); LOG(".\n");
+		LOG(", write failed, code=%d.\n", iResult);
 		return iResult;
 	}
 	
@@ -883,8 +885,7 @@ DLLEXPORT int __stdcall SetFATEntry(DISK *pDisk, DWORD dwBlock,
 	// error checking
 	if(((int)dwBlock<0)||(dwBlock>=pDisk->dwBlocks))
 	{
-		LOG("SetFATEntry(): dwBlock="); LOG_INT(dwBlock); 
-		LOG(" out of bounds.\n");
+		LOG("SetFATEntry(): dwBlock=%d out of bounds.\n", dwBlock); 
 		return -1;
 	}
 	
@@ -908,8 +909,7 @@ DLLEXPORT int __stdcall SetFATEntry(DISK *pDisk, DWORD dwBlock,
 	iResult = WriteBlocks(pDisk, dwBlock/170 + 5, 1, pDisk->ucFATCache);
 	if(ERR_OK!=iResult)
 	{
-		LOG("SetFATEntry(): WriteBlocks() error, code="); LOG_INT(iResult); 
-		LOG(".\n");
+		LOG("SetFATEntry(): WriteBlocks() error, code=%d.\n", iResult); 
 		return -1;
 	}
 	
@@ -967,8 +967,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		(!((cBuf[iDeviceNameIndex]==0)&&(cBuf[iDeviceNameIndex+1]==0))))
 			iDeviceNameIndex++;
 			
-	LOG("End of QueryDosDevice() buffer: "); LOG_INT(iDeviceNameIndex);
-	LOG("\n");
+	LOG("End of QueryDosDevice() buffer: %d\n", iDeviceNameIndex);
 	iDeviceNameIndex++;
 
 	// open ini file, parse, add image file entries to QueryList
@@ -1068,7 +1067,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		{
 			if(!g_iOptionEnablePhysicalDisks)
 			{
-				LOG("Skipping "); LOG(cMsDosName); LOG(" (not enabled)\n");
+				LOG("Skipping %s (not enabled)\n", cMsDosName);
 				continue;
 			}
 			iType = TYPE_DISK;
@@ -1077,7 +1076,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		{
 			if(!g_iOptionEnableCDROM)
 			{
-				LOG("Skipping "); LOG(cMsDosName); LOG(" (not enabled)\n");
+				LOG("Skipping %s (not enabled)\n", cMsDosName);
 				continue;
 			}
 			iType = TYPE_CDROM;
@@ -1086,7 +1085,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		{
 			if(!g_iOptionEnableFloppy)
 			{
-				LOG("Skipping "); LOG(cMsDosName); LOG(" (not enabled)\n");
+				LOG("Skipping %s (not enabled)\n", cMsDosName);
 				continue;
 			}
 			iType = TYPE_FLOPPY;
@@ -1095,7 +1094,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		{
 			if(!g_iOptionEnableFloppy)
 			{
-				LOG("Skipping "); LOG(cMsDosName); LOG(" (not enabled)\n");
+				LOG("Skipping %s (not enabled)\n", cMsDosName);
 				continue;
 			}
 			iType = TYPE_FLOPPY;
@@ -1104,7 +1103,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		{
 			if(!g_iOptionEnableImages)
 			{
-				LOG("Skipping "); LOG(cMsDosName); LOG(" (not enabled)\n");
+				LOG("Skipping %s (not enabled)\n", cMsDosName);
 				continue;
 			}
 			iType = TYPE_FILE;
@@ -1114,7 +1113,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		else
 		{
 			// skip everything else
-			LOG("Skipping "); LOG(cMsDosName); LOG(" (not supported)\n");
+				LOG("Skipping %s (not supported)\n", cMsDosName);
 			continue;
 		}
 
@@ -1135,8 +1134,7 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		ucBuf = ucBufUnaligned;
 		while(0!=((DWORD)ucBuf & (DWORD)2047)) ucBuf++;
 
-		LOG("\n"); LOG(cMsDosName); LOG(" = ");
-		LOG(cLongName); LOG("\n  Opening: ");
+		LOG("\n%s = %s\n  Opening: ", cMsDosName, cLongName);
 
 		// if floppy, try to enable 80/2/10x512 and 80/2/20x512 format
 		if(TYPE_FLOPPY==iType)
@@ -1444,10 +1442,8 @@ DLLEXPORT DISK __stdcall *ScanDevices(DWORD dwAllowNonEnsoniqFilesystems)
 		pDisk->dwFATCacheBlock = 0xFFFFFFFF;
 
 
-		LOG_INT(pDisk->dwBlocks); LOG(" blocks (logical), ");
-		LOG_INT(pDisk->dwPhysicalBlocks);
-		LOG(" blocks (physical), "); LOG_INT(pDisk->dwBlocksFree);
-		LOG(" blocks free.\n");
+		LOG("%d blocks (logical), %d  blocks (physical),  blocks free.\n",
+			pDisk->dwBlocks, pDisk->dwPhysicalBlocks, pDisk->dwBlocksFree);
 
 		// read Giebler allocation bitmap
 		if((TYPE_FILE==iType)&&(IMAGE_FILE_GIEBLER==iImageType))
@@ -1763,8 +1759,7 @@ DLLEXPORT void __stdcall FreeDiskList(int iShowProgress, DISK *pRoot)
 			strcat(cText, pDisk->cMsDosName);
 			UpdateProgressDialog(cText, iDeviceCounter*100/iMaxDevices);
 		}
-		LOG("FreeDiskList(): \"");
-		LOG(pDisk->cMsDosName); LOG("\"\n");
+		LOG("FreeDiskList(): '%s'\n", pDisk->cMsDosName);
 
 		// flush the cache before deleting it
 		CacheFlush(pDisk);
@@ -1812,8 +1807,7 @@ BOOL EnableExtendedFormats(const char *szDrive, BOOL bEnable)
 	DWORD nBytesReturned, dwError;
 	BOOL status;
 	
-	LOG("EnableExtendedFormats(\""); LOG((char*)szDrive); LOG("\", ");
-	LOG_INT(bEnable); LOG("): ");
+	LOG("EnableExtendedFormats('%s', %d): ", szDrive, bEnable);
 
 	// We need to enable the Extended formats without prompting the driver
 	// to test the media (first) - so we have to open it with Query access
