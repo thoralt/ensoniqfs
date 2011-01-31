@@ -1,7 +1,7 @@
 [Project]
 FileName=EnsoniqFS.dev
 Name=EnsoniqFS
-UnitCount=23
+UnitCount=25
 Type=3
 Ver=1
 ObjFiles=
@@ -27,7 +27,7 @@ CustomMakefile=
 IncludeVersionInfo=0
 SupportXPThemes=0
 CompilerSet=0
-CompilerSettings=00000000010010000000e1
+CompilerSettings=00000000010010000000d0
 
 [Unit1]
 FileName=fsplugin.h
@@ -177,16 +177,6 @@ Priority=1000
 OverrideBuildCmd=0
 BuildCmd=
 
-[Unit15]
-FileName=rsrc.h
-CompileCpp=0
-Folder=EnsoniqFS
-Compile=1
-Link=1
-Priority=1000
-OverrideBuildCmd=0
-BuildCmd=
-
 [Unit14]
 FileName=progressdlg.rc
 Folder=EnsoniqFS
@@ -197,15 +187,6 @@ OverrideBuildCmd=0
 BuildCmd=
 
 [Unit16]
-FileName=CREDITS
-Folder=
-Compile=0
-Link=0
-Priority=1000
-OverrideBuildCmd=0
-BuildCmd=
-
-[Unit17]
 FileName=README
 Folder=
 Compile=0
@@ -214,7 +195,7 @@ Priority=1000
 OverrideBuildCmd=0
 BuildCmd=
 
-[Unit18]
+[Unit17]
 FileName=LICENSE
 Folder=
 Compile=0
@@ -223,17 +204,17 @@ Priority=1000
 OverrideBuildCmd=0
 BuildCmd=
 
-[Unit19]
+[Unit18]
 FileName=diskstructure.h
-CompileCpp=0
 Folder=
 Compile=1
 Link=1
 Priority=1000
 OverrideBuildCmd=0
 BuildCmd=
+CompileCpp=0
 
-[Unit20]
+[Unit19]
 FileName=optionsdlg.c
 CompileCpp=0
 Folder=
@@ -243,7 +224,7 @@ Priority=1000
 OverrideBuildCmd=0
 BuildCmd=
 
-[Unit21]
+[Unit20]
 FileName=optionsdlg.h
 CompileCpp=0
 Folder=
@@ -253,7 +234,7 @@ Priority=1000
 OverrideBuildCmd=0
 BuildCmd=
 
-[Unit22]
+[Unit21]
 FileName=ini.c
 CompileCpp=0
 Folder=
@@ -263,12 +244,51 @@ Priority=1000
 OverrideBuildCmd=0
 BuildCmd=
 
-[Unit23]
+[Unit22]
 FileName=ini.h
 CompileCpp=0
 Folder=
 Compile=1
 Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit23]
+FileName=choosediskdlg.c
+CompileCpp=0
+Folder=
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit24]
+FileName=choosediskdlg.h
+CompileCpp=0
+Folder=
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit25]
+FileName=resource.h
+CompileCpp=0
+Folder=EnsoniqFS
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit15]
+FileName=CREDITS
+Folder=
+Compile=0
+Link=0
 Priority=1000
 OverrideBuildCmd=0
 BuildCmd=

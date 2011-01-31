@@ -40,7 +40,7 @@
 #include "optionsdlg.h"
 #include "log.h"
 #include "error.h"
-#include "rsrc.h"
+#include "resource.h"
 #include "disk.h"
 #include "ini.h"
 #include "EnsoniqFS.h"

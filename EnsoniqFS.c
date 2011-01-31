@@ -23,7 +23,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-// 
+// rea
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, 
@@ -50,6 +50,7 @@
 #include "error.h"
 #include "cache.h"
 #include "optionsdlg.h"
+#include "choosediskdlg.h"
 
 //----------------------------------------------------------------------------
 // globals
@@ -107,8 +108,254 @@ void upcase(char *c)
 	for(i=j; i<(int)strlen(c); i++) c[i] = toupper(c[i]);
 }
 
+int FixDirectoryEntries(DISK *pDisk, ENSONIQDIR *pDir)
+{
+	int i, iResult;
+	DWORD dwBlock;
+	
+	LOG("Fixing directory entries\n");
+		
+	for(i=0; i<39; i++)
+	{
+		if(FILE_TYPE_EMPTY==pDir->ucDirectory[i*26+1]) continue; // skip blank entries
+		if(FILE_TYPE_PARENT_DIRECTORY==pDir->ucDirectory[i*26+1]) continue; // skip link to parent
+		if(FILE_TYPE_DIRECTORY==pDir->ucDirectory[i*26+1]) continue; // skip subdirectories
+		
+		// calculate real length according to FAT
+	    pDir->Entry[i].dwLen = 0;
+		dwBlock = pDir->Entry[i].dwStart;
+		while(dwBlock>2)
+		{
+            pDir->Entry[i].dwLen++;
+			dwBlock = GetFATEntry(pDisk, dwBlock);    
+		}
+		
+		pDir->ucDirectory[i*26 + 14] = pDir->Entry[i].dwLen >> 8; 
+		pDir->ucDirectory[i*26 + 15] = pDir->Entry[i].dwLen & 0xFF;
+
+		LOG("%s: LEN = 0x%02X 0x%02X START = 0x%02X 0x%02X 0x%02X 0x%02X\n", 
+                 pDir->Entry[i].cName,
+                 pDir->ucDirectory[i*26 + 14],
+		         pDir->ucDirectory[i*26 + 15],
+                 pDir->ucDirectory[i*26 + 18],
+                 pDir->ucDirectory[i*26 + 19],
+                 pDir->ucDirectory[i*26 + 20],
+                 pDir->ucDirectory[i*26 + 21]); 
+                 
+		iResult = WriteBlocks(pDisk, pDir->dwDirectoryBlock, 2, pDir->ucDirectory);
+		if(ERR_OK!=iResult)
+		{
+			LOG("Error writing Ensoniq file, code=%d\n", iResult);
+			return ERR_WRITE;
+		}
+		iResult = CacheFlush(pDisk);
+		if(ERR_OK!=iResult)
+		{
+			LOG("Error flushing cache, code=%d\n", iResult);
+			return ERR_WRITE;
+		}
+	}
+	
+	return ERR_OK;
+}
+
 //----------------------------------------------------------------------------
-// ReadEnsoniqFile
+// ReadDirectory
+// 
+// Reads the directory starting with dwBlock from pDisk
+// 
+// -> pDisk: pointer to valid disk structure
+//    dwBlock: starting block
+//    pDir: ENSONIQDIR structure to receive directory listing
+//	  ucShowWarning: Show warning about bad file sizes
+// <- ERR_OK
+//    ERR_NOT_OPEN
+//    ERR_OUT_OF_BOUNDS
+//    ERR_READ
+//    ERR_MEM
+//    ERR_NOT_SUPPORTED
+//    ERR_SEEK
+//----------------------------------------------------------------------------
+int ReadDirectory(DISK *pDisk, ENSONIQDIR *pDir, unsigned char ucShowWarning)
+{
+ 	char cWarningMsg[2048] = "Some files in this directory have invalid "
+		 "file sizes according to their directory\nentries. "
+		 "You should consider using ETools to scan and/or repair "
+		 "this disc.\n\n"
+		 "The following files have differing values for directory entry "
+		 "and size\ncalculation from FAT:\n\n";
+    char cWarning[256];
+    unsigned char ucWarningFlag = 0;
+	int iResult, i, j, iIndex;
+	DWORD dwBlock, dwLen, dwStart, dwContiguous;
+
+	LOG("ReadDirectory(block=%d)\n", pDir->dwDirectoryBlock);
+
+	// initialize ENSONIQDIR, but keep dwDirectoryBlock
+	dwBlock = pDir->dwDirectoryBlock;
+	memset(pDir, 0, sizeof(ENSONIQDIR));
+	pDir->dwDirectoryBlock = dwBlock;
+
+	// read directory blocks from disk
+	iResult = ReadBlocks(pDisk, dwBlock, 2, pDir->ucDirectory);
+	if(ERR_OK!=iResult) return iResult;
+
+	// loop through all entries
+//	LOG("\n");
+	for(i=0; i<39; i++)
+	{
+		pDir->Entry[i].ucType = pDir->ucDirectory[i*26+1];
+		memset(&(pDir->VirtualWaveEntry[i]), 0, sizeof(VIRTUALWAVEFILE));
+		
+/*
+		// debug output
+		LOG("Directory entry #"); LOG_HEX2(i); LOG(": ");
+		for(j=0; j<26; j++) 
+		{
+			LOG_HEX2(pDir->ucDirectory[i*26+j]);
+			LOG(" ");
+		}
+		LOG("\n");
+*/		
+		// check type
+		if(0x00==pDir->ucDirectory[i*26+1]) continue; // skip blank entries
+		if(0x08==pDir->ucDirectory[i*26+1]) continue; // skip link to parent
+
+		// copy name
+		strncpy(pDir->Entry[i].cName, pDir->ucDirectory+i*26+2, 12);
+		while(strlen(pDir->Entry[i].cName)<12)
+			strcat(pDir->Entry[i].cName, " ");
+		pDir->Entry[i].cName[12] = 0;
+		
+		strncpy(pDir->Entry[i].cLegalName, pDir->ucDirectory+i*26+2, 12);
+		MakeLegalName(pDir->Entry[i].cLegalName);
+
+		// calculate file properties
+		pDir->Entry[i].dwLen        = (pDir->ucDirectory[i*26 + 14]<<8)
+									+  pDir->ucDirectory[i*26 + 15];
+		pDir->Entry[i].dwContiguous = (pDir->ucDirectory[i*26 + 16]<<8)
+									+  pDir->ucDirectory[i*26 + 17];
+		if(0==pDir->Entry[i].dwLen)
+		{
+			pDir->Entry[i].dwLen = pDir->Entry[i].dwContiguous;
+		}
+		pDir->Entry[i].dwStart      = (pDir->ucDirectory[i*26 + 18]<<24)
+									+ (pDir->ucDirectory[i*26 + 19]<<16)
+									+ (pDir->ucDirectory[i*26 + 20]<<8)  
+									+  pDir->ucDirectory[i*26 + 21];
+		pDir->Entry[i].ucMultiFileIndex = pDir->ucDirectory[i*26 + 22];
+		// calculate real length according to FAT
+	    dwLen = 0;
+		dwBlock = pDir->Entry[i].dwStart;
+		while(dwBlock>2)
+		{
+            dwLen++;
+			dwBlock = GetFATEntry(pDisk, dwBlock);    
+		}
+
+/*		LOG("%s: LEN = 0x%02X 0x%02X START = 0x%02X 0x%02X 0x%02X 0x%02X\n", 
+                 pDir->Entry[i].cName,
+                 pDir->ucDirectory[i*26 + 14],
+		         pDir->ucDirectory[i*26 + 15],
+                 pDir->ucDirectory[i*26 + 18],
+                 pDir->ucDirectory[i*26 + 19],
+                 pDir->ucDirectory[i*26 + 20],
+                 pDir->ucDirectory[i*26 + 21]);
+*/                 
+		if((dwLen!=pDir->Entry[i].dwLen)&&(pDir->Entry[i].ucType!=FILE_TYPE_DIRECTORY))
+		{
+  		    LOG("Warning: for file '%s' length FAT (%d) != length directory entry (%d)\n",
+			    pDir->Entry[i].cName, dwLen, pDir->Entry[i].dwLen);
+			    
+		    sprintf(cWarning, "%s: %d blocks (dir) / %d blocks (FAT), %d blocks contiguous\n",
+		        pDir->Entry[i].cName, (int)pDir->Entry[i].dwLen, (int)dwLen, 
+				(int)pDir->Entry[i].dwContiguous);
+		    strcat(cWarningMsg, cWarning);
+		    ucWarningFlag = 1;
+		}	 							   
+	}
+	
+	if(ucWarningFlag&&ucShowWarning)
+	{
+		strcat(cWarningMsg, "\n\nShould this problem be corrected?");
+   		if(IDYES == MessageBoxA(0, cWarningMsg, "EnsoniqFS � Warning", 
+		   MB_ICONWARNING | MB_YESNO))
+		{
+			if(ERR_OK!=FixDirectoryEntries(pDisk, pDir))
+			{
+		   		MessageBoxA(0, "Could not write directory.", "EnsoniqFS � Error", 
+				   MB_ICONSTOP);
+			}
+		}
+ 	}
+	
+	// loop again through all entries to find ASR audio tracks and
+	// assign virtual wave files to them
+	iIndex = 0;
+	for(i=0; i<39; i++)
+	{
+		// skip all non-audio-track-files		
+		if(pDir->Entry[i].ucType != FILE_TYPE_ASR_AUDIOTRACK) continue;
+		
+		// this is a new audio track
+		strcpy(pDir->VirtualWaveEntry[iIndex].cName, pDir->Entry[i].cName);
+		strcpy(pDir->VirtualWaveEntry[iIndex].cLegalName, pDir->Entry[i].cLegalName);
+		dwLen = pDir->Entry[i].dwLen;
+		dwStart = pDir->Entry[i].dwStart;
+		dwContiguous = pDir->Entry[i].dwContiguous;
+		pDir->VirtualWaveEntry[iIndex].dwLen1 = dwLen;
+		pDir->VirtualWaveEntry[iIndex].dwStart1 = dwStart;
+		pDir->VirtualWaveEntry[iIndex].dwContiguous1 = dwContiguous;
+		pDir->VirtualWaveEntry[iIndex].ucIsStereo = 0;
+		
+		LOG("audio track '%s', len=%d\n", pDir->VirtualWaveEntry[iIndex].cLegalName, dwLen);
+		
+		// search for a matching file among the already scanned files
+		// to form a stereo pair
+		for(j=iIndex-1; j>=0; j--)
+		{
+//			LOG("comparing audio track '%s', len=%d to '%s, len=%d\n", 
+//				pDir->VirtualWaveEntry[iIndex].cLegalName, dwLen,
+//				pDir->VirtualWaveEntry[j].cLegalName, pDir->VirtualWaveEntry[j].dwLen1);
+
+			if(dwLen==pDir->VirtualWaveEntry[j].dwLen1)
+			{				
+				iIndex++;	// store stereo information in next record
+				pDir->VirtualWaveEntry[iIndex].ucIsStereo = 1;
+				
+				pDir->VirtualWaveEntry[iIndex].dwLen2 = 
+					pDir->VirtualWaveEntry[j].dwLen1;
+				pDir->VirtualWaveEntry[iIndex].dwStart2 = 
+					pDir->VirtualWaveEntry[j].dwStart1;
+				pDir->VirtualWaveEntry[iIndex].dwContiguous2 = 
+					pDir->VirtualWaveEntry[j].dwContiguous1;
+					
+				pDir->VirtualWaveEntry[iIndex].dwLen1 = dwLen;
+				pDir->VirtualWaveEntry[iIndex].dwStart1 = dwStart;
+				pDir->VirtualWaveEntry[iIndex].dwContiguous1 = dwContiguous;
+					
+				strcpy(pDir->VirtualWaveEntry[iIndex].cName, 
+					pDir->VirtualWaveEntry[j].cName);
+				strcpy(pDir->VirtualWaveEntry[iIndex].cLegalName, 
+					pDir->VirtualWaveEntry[j].cLegalName);
+				LOG("Stereo pair detected: name='%s', len1=%d, len2=%d, start1=%d, start2=%d.\n",
+					pDir->VirtualWaveEntry[iIndex].cLegalName, 
+					pDir->VirtualWaveEntry[iIndex].dwLen1,
+					pDir->VirtualWaveEntry[iIndex].dwLen2,
+					pDir->VirtualWaveEntry[iIndex].dwStart1,
+					pDir->VirtualWaveEntry[iIndex].dwStart2);
+				break;
+			}
+		}
+		
+		iIndex++;
+	}
+	
+	return ERR_OK;
+}
+
+//----------------------------------------------------------------------------
+// ReadWaveFile
 // 
 // Reads a file using the FAT to a local file in WAV format (44 bytes header)
 // 
@@ -130,14 +377,21 @@ void upcase(char *c)
 int ReadWaveFile(DISK *pDisk, VIRTUALWAVEFILE *pVirtualWaveFile, char *cDestFN,
 				 char *cSourceFN)
 {
-	unsigned char ucBuf[512], ucTemp;
+	unsigned char ucBuf1[512], ucBuf2[512], ucStereoBuf[1024], ucTemp;
 	int i, j, iResult, iProgress, iLastProgress = -1;
-	DWORD dwBlock, dwChunkSize, dwSampleRate, dwSize;
+	DWORD dwByteRate, dwBlock1, dwBlock2, dwChunkSize, dwSampleRate, dwSize;
 	FILE *f;
 
-	dwSize = pVirtualWaveFile->dwLen * 512;
+	// TODO: Handle multi disk audio tracks (priority: very low, multi disk 
+	// audio tracks are theoretically not possible)
+
+	dwSize = pVirtualWaveFile->dwLen1 * 512;
+	if(pVirtualWaveFile->ucIsStereo) dwSize *= 2;
+	
 	dwChunkSize = dwSize + 36;
 	dwSampleRate = 44100;
+	dwByteRate = dwSampleRate*2; // 16 bits
+	if(pVirtualWaveFile->ucIsStereo) dwByteRate *= 2;
 	
 	LOG("ReadWaveFile('%s'->'%s', size=%d bytes)\n", cSourceFN, cDestFN, 
 		dwSize);
@@ -157,53 +411,53 @@ int ReadWaveFile(DISK *pDisk, VIRTUALWAVEFILE *pVirtualWaveFile, char *cDestFN,
 
 	// write WAV header to file	
 	LOG("Writing WAV header... ");
-	memset(ucBuf, 0, 512);
-	ucBuf[ 0] = 'R';
-	ucBuf[ 1] = 'I';
-	ucBuf[ 2] = 'F';
-	ucBuf[ 3] = 'F';
-	ucBuf[ 4] = BYTE0(dwChunkSize);
-	ucBuf[ 5] = BYTE1(dwChunkSize);
-	ucBuf[ 6] = BYTE2(dwChunkSize);
-	ucBuf[ 7] = BYTE3(dwChunkSize);
-	ucBuf[ 8] = 'W'; 
-	ucBuf[ 9] = 'A';
-	ucBuf[10] = 'V';
-	ucBuf[11] = 'E';
-	ucBuf[12] = 'f';
-	ucBuf[13] = 'm';
-	ucBuf[14] = 't';
-	ucBuf[15] = ' ';
-	ucBuf[16] = 16;		// sub chunk size (16)
-	ucBuf[17] = 0;
-	ucBuf[18] = 0;
-	ucBuf[19] = 0;
-	ucBuf[20] = 0x01;	// format = PCM (0x0001)
-	ucBuf[21] = 0x00;
-	ucBuf[22] = 0x01;	// mono (0x0001)
-	ucBuf[23] = 0x00;
-	ucBuf[24] = BYTE0(dwSampleRate);
-	ucBuf[25] = BYTE1(dwSampleRate);
-	ucBuf[26] = BYTE2(dwSampleRate);
-	ucBuf[27] = BYTE3(dwSampleRate);
-	ucBuf[28] = BYTE0(dwSampleRate*2);	// byte rate
-	ucBuf[29] = BYTE1(dwSampleRate*2);
-	ucBuf[30] = BYTE2(dwSampleRate*2);
-	ucBuf[31] = BYTE3(dwSampleRate*2);
-	ucBuf[32] = 0x02;	// block align = 0x0002 bytes
-	ucBuf[33] = 0x00;
-	ucBuf[34] = 16;		// 16 bits per sample
-	ucBuf[35] = 0;
-	ucBuf[36] = 'd';
-	ucBuf[37] = 'a';
-	ucBuf[38] = 't';
-	ucBuf[39] = 'a';
-	ucBuf[40] = BYTE0(dwSize);
-	ucBuf[41] = BYTE1(dwSize);
-	ucBuf[42] = BYTE2(dwSize);
-	ucBuf[43] = BYTE3(dwSize);
+	memset(ucBuf1, 0, 512);
+	ucBuf1[ 0] = 'R';
+	ucBuf1[ 1] = 'I';
+	ucBuf1[ 2] = 'F';
+	ucBuf1[ 3] = 'F';
+	ucBuf1[ 4] = BYTE0(dwChunkSize);
+	ucBuf1[ 5] = BYTE1(dwChunkSize);
+	ucBuf1[ 6] = BYTE2(dwChunkSize);
+	ucBuf1[ 7] = BYTE3(dwChunkSize);
+	ucBuf1[ 8] = 'W'; 
+	ucBuf1[ 9] = 'A';
+	ucBuf1[10] = 'V';
+	ucBuf1[11] = 'E';
+	ucBuf1[12] = 'f';
+	ucBuf1[13] = 'm';
+	ucBuf1[14] = 't';
+	ucBuf1[15] = ' ';
+	ucBuf1[16] = 16;		// sub chunk size (16)
+	ucBuf1[17] = 0;
+	ucBuf1[18] = 0;
+	ucBuf1[19] = 0;
+	ucBuf1[20] = 0x01;	// format = PCM (0x0001)
+	ucBuf1[21] = 0x00;
+	ucBuf1[22] = (pVirtualWaveFile->ucIsStereo) ? 0x02 : 0x01;
+	ucBuf1[23] = 0x00;
+	ucBuf1[24] = BYTE0(dwSampleRate);
+	ucBuf1[25] = BYTE1(dwSampleRate);
+	ucBuf1[26] = BYTE2(dwSampleRate);
+	ucBuf1[27] = BYTE3(dwSampleRate);
+	ucBuf1[28] = BYTE0(dwByteRate);	// byte rate
+	ucBuf1[29] = BYTE1(dwByteRate);
+	ucBuf1[30] = BYTE2(dwByteRate);
+	ucBuf1[31] = BYTE3(dwByteRate);
+	ucBuf1[32] = (pVirtualWaveFile->ucIsStereo) ? 0x04 : 0x02;	// block align
+	ucBuf1[33] = 0x00;
+	ucBuf1[34] = 16;		// 16 bits per sample
+	ucBuf1[35] = 0;
+	ucBuf1[36] = 'd';
+	ucBuf1[37] = 'a';
+	ucBuf1[38] = 't';
+	ucBuf1[39] = 'a';
+	ucBuf1[40] = BYTE0(dwSize);
+	ucBuf1[41] = BYTE1(dwSize);
+	ucBuf1[42] = BYTE2(dwSize);
+	ucBuf1[43] = BYTE3(dwSize);
 	
-	if(44!=fwrite(ucBuf, 1, 44, f))
+	if(44!=fwrite(ucBuf1, 1, 44, f))
 	{
 		LOG("Error writing to destination file.\n");
 		fclose(f);
@@ -213,48 +467,78 @@ int ReadWaveFile(DISK *pDisk, VIRTUALWAVEFILE *pVirtualWaveFile, char *cDestFN,
 	LOG("Extracting file... ");
 	
 	// set starting block
-	dwBlock = pVirtualWaveFile->dwStart;
+	dwBlock1 = pVirtualWaveFile->dwStart1;
+	dwBlock2 = pVirtualWaveFile->dwStart2;
 	
 	// loop through all blocks
-	for(i=0; i<(int)pVirtualWaveFile->dwLen; i++)
+	for(i=0; i<(int)pVirtualWaveFile->dwLen1; i++)
 	{
 		// read next block from disk image
-		iResult = ReadBlock(pDisk, dwBlock, ucBuf);
+		iResult = ReadBlock(pDisk, dwBlock1, ucBuf1);
 		if(ERR_OK!=iResult)
 		{
 			LOG("Error reading block, code=%d.\n", iResult);
 			fclose(f);
 			return iResult;
 		}
-		
-		// swap bytes
-		for(j=0; j<256; j++)
+
+		if(pVirtualWaveFile->ucIsStereo)
 		{
-			ucTemp = ucBuf[j*2];
-			ucBuf[j*2] = ucBuf[j*2+1];
-			ucBuf[j*2+1] = ucTemp;
+			iResult = ReadBlock(pDisk, dwBlock2, ucBuf2);
+			if(ERR_OK!=iResult)
+			{
+				LOG("Error reading block, code=%d.\n", iResult);
+				fclose(f);
+				return iResult;
+			}
+			// swap bytes and multiplex two channels
+			for(j=0; j<256; j++)
+			{
+				ucStereoBuf[j*4+0] = ucBuf1[j*2+1];
+				ucStereoBuf[j*4+1] = ucBuf1[j*2+0];
+				ucStereoBuf[j*4+2] = ucBuf2[j*2+1];
+				ucStereoBuf[j*4+3] = ucBuf2[j*2+0];
+			}
+			// write next block to file
+			if(1024!=fwrite(ucStereoBuf, 1, 1024, f))
+			{
+				LOG("Error writing to destination file.\n");
+				fclose(f);
+				return ERR_LOCAL_WRITE;
+			}
+			// get next FAT entry
+			dwBlock2 = GetFATEntry(pDisk, dwBlock2);
 		}
-		
-		// write next block to file
-		if(512!=fwrite(ucBuf, 1, 512, f))
+		else
 		{
-			LOG("Error writing to destination file.\n");
-			fclose(f);
-			return ERR_LOCAL_WRITE;
+			// swap bytes, only one channel
+			for(j=0; j<256; j++)
+			{
+				ucTemp = ucBuf1[j*2];
+				ucBuf1[j*2] = ucBuf1[j*2+1];
+				ucBuf1[j*2+1] = ucTemp;
+			}
+			// write next block to file
+			if(512!=fwrite(ucBuf1, 1, 512, f))
+			{
+				LOG("Error writing to destination file.\n");
+				fclose(f);
+				return ERR_LOCAL_WRITE;
+			}
 		}
-		
+				
 		// get next FAT entry
-		dwBlock = GetFATEntry(pDisk, dwBlock);
+		dwBlock1 = GetFATEntry(pDisk, dwBlock1);
 
 		// either end of file reached or error getting FAT entry occured
-		if(dwBlock<3)
+		if((dwBlock1<3)||((pVirtualWaveFile->ucIsStereo)&&(dwBlock2<3)))
 		{
-			LOG("FAT entry=%d, i=%d, Len=%d - stopping.\n", dwBlock, i, 
-				pVirtualWaveFile->dwLen);
+			LOG("Warning: EOF in FAT occured before file length was reached.\n");
 			break;
 		}
+		
 		// notify TotalCmd of progress
-		iProgress = i*100/pVirtualWaveFile->dwLen;
+		iProgress = i*100/pVirtualWaveFile->dwLen1;
 		if((iProgress-iLastProgress)>5)
 		{
 			if(1==g_pProgressProc(g_iPluginNr, cSourceFN, cDestFN, iProgress))
@@ -274,7 +558,151 @@ int ReadWaveFile(DISK *pDisk, VIRTUALWAVEFILE *pVirtualWaveFile, char *cDestFN,
 		
 	return ERR_OK;
 }
-					
+
+DISK *SearchDisk(char *cMsDosName)
+{
+	DISK *pDisk = g_pDiskListRoot;
+	
+	while(pDisk)
+	{
+		if(0==strcmp(cMsDosName, pDisk->cMsDosName))
+		{
+			return pDisk;
+		}
+		pDisk = pDisk->pNext;
+	}
+	
+	return 0;
+}
+
+int SelectNextDisk(DISK **pDisk, DWORD *dwBlock, ENSONIQDIRENTRY *pDirEntry)
+{
+	char cMessage[512], *cMsDosName;
+	DISK *pNewDisk;
+	ENSONIQDIRENTRY *pe;
+	int i, iResult;
+	
+	// loop until a valid next disk is selected or user aborts
+	// -> user gets chance to switch disks or disk images multiple
+	// times if choice was wrong
+	while(1)
+	{
+		// ask user for new disk
+		pNewDisk = 0;
+		iResult = CreateChooseDiskDialogModal(0, &pNewDisk, *pDisk);
+		if((iResult==IDCANCEL)||(pNewDisk==0))
+		{
+			return ERR_ABORTED;
+		}
+		
+		// get the MSDOS path of the chosen disk
+		cMsDosName = malloc(strlen(pNewDisk->cMsDosName));
+		strcpy(cMsDosName, pNewDisk->cMsDosName);
+		
+		// reload disk list, just in case user has exchanged some
+		// removable media
+		FreeDiskList(0, g_pDiskListRoot);
+		g_pDiskListRoot = ScanDevices(0);
+		if(0==g_pDiskListRoot)
+		{
+			free(cMsDosName);
+			if(IDCANCEL==MessageBoxA(0, 
+				"There was an error during device scan. "
+				"Try again?", "EnsoniqFS � Warning", 
+				MB_ICONWARNING | MB_RETRYCANCEL))
+			{
+				return ERR_ABORTED;
+			}
+			continue; // retry
+		}
+		
+		// find the disk from the remembered name
+		pNewDisk = SearchDisk(cMsDosName);
+		free(cMsDosName);
+		if(0==pNewDisk)
+		{
+			if(IDCANCEL==MessageBoxA(0, 
+				"The selected disk could not be found. "
+				"Try again?", "EnsoniqFS � Warning", 
+				MB_ICONWARNING | MB_RETRYCANCEL))
+			{
+				return ERR_ABORTED;
+			}
+			continue; // retry
+		}
+
+		// read root directory
+		ENSONIQDIR e;
+		e.dwDirectoryBlock = 3;
+		if(ERR_OK!=ReadDirectory(pNewDisk, &e, 0))
+		{
+			if(IDCANCEL==MessageBoxA(0, 
+				"Could not read the selected disk. "
+				"Retry?", "EnsoniqFS � Warning", 
+				MB_ICONWARNING | MB_RETRYCANCEL))
+			{
+				return ERR_ABORTED;
+			}
+			continue; // retry
+		}
+
+		// search the new directory for the file in question
+		for(i=0; i<39; i++)
+		{
+			pe = &e.Entry[i];
+			
+			// skip empty lines and directory pointers
+			if(pe->ucType==FILE_TYPE_EMPTY) continue;
+			if(pe->ucType==FILE_TYPE_DIRECTORY) continue;
+			if(pe->ucType==FILE_TYPE_PARENT_DIRECTORY) continue;
+			
+			// continue if type or name differs
+			if(pe->ucType!=pDirEntry->ucType) continue;
+			if(0!=strncmp(pe->cName, pDirEntry->cName, 12)) continue;
+
+			// if we reach this point, all checks have been made
+			// -> this is our file, leave the loop
+			break;
+		}
+
+		// Did we reach the end of the directory without finding our file?
+		if(i>=39)
+		{
+			if(IDCANCEL==MessageBoxA(0, 
+				"Could not find the multi disk file on the selected disk. "
+				"Retry?", "EnsoniqFS � Warning", 
+				MB_ICONWARNING | MB_RETRYCANCEL))
+			{
+				return ERR_ABORTED;
+			}
+			continue; // retry
+		}
+		
+		// check multi disk index
+		if(pe->ucMultiFileIndex != pDirEntry->ucMultiFileIndex+1)
+		{
+			sprintf(cMessage, 
+				"The selected disk contains the requested file, but this\n"
+				"is part %d instead of %d. Retry?", 
+				pe->ucMultiFileIndex, pDirEntry->ucMultiFileIndex+1);
+			if(IDCANCEL==MessageBoxA(0, 
+				cMessage, "EnsoniqFS � Warning", 
+				MB_ICONWARNING | MB_RETRYCANCEL))
+			{
+				return ERR_ABORTED;
+			}
+			continue; // retry
+		}
+		
+		// Switch to next part
+		memcpy(pDirEntry, pe, sizeof(ENSONIQDIRENTRY));
+		*pDisk = pNewDisk;
+		*dwBlock = pe->dwStart;
+		break;
+	}
+	
+	return ERR_OK;
+}
 //----------------------------------------------------------------------------
 // ReadEnsoniqFile
 // 
@@ -298,10 +726,10 @@ int ReadWaveFile(DISK *pDisk, VIRTUALWAVEFILE *pVirtualWaveFile, char *cDestFN,
 int ReadEnsoniqFile(DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, char *cDestFN,
 					char *cSourceFN)
 {
-	unsigned char ucBuf[512];
+	unsigned char ucBuf[512], ucCopyMultidisk = 0;
 	char cFiletype[13];
 	int i, iResult, iProgress, iLastProgress = -1;
-	DWORD dwBlock;
+	DWORD dwBlock, dwSize, dwBlockCounter = 0;
 	FILE *f;
 	
 	LOG("Reading Ensoniq file (Start=%d, size=%d blocks, type=%d, "
@@ -312,6 +740,46 @@ int ReadEnsoniqFile(DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, char *cDestFN,
 	if(NULL==pDisk) return ERR_NOT_OPEN;
 	if(NULL==pDirEntry) return ERR_NOT_OPEN;
 	if(NULL==cDestFN) return ERR_LOCAL_WRITE;
+
+	// apply special treatment if this is a multi disk file
+	if(pDirEntry->ucMultiFileIndex)
+	{
+		// ask if multi disk copy is required
+		if(1==pDirEntry->ucMultiFileIndex)
+		{
+	   		i = MessageBoxA(0, "This file is the first part of a "
+			   "multi-disk file. To merge all parts\n"
+			   "into one file make sure you have\n"
+			   " (a) all necessary removable disks ready\n"
+			   "   or\n"
+			   " (b) all necessary fixed disks or image files mounted.\n\n"
+			   "Do you want to merge all files (Yes), copy only this single\n"
+			   "file (No) or cancel the process?", 
+			   "EnsoniqFS � Warning", 
+			   MB_ICONWARNING | MB_YESNOCANCEL);
+			if(i==IDCANCEL) 
+			{
+				return ERR_ABORTED;
+			}
+			if(i==IDYES)
+			{
+				ucCopyMultidisk = 1;	
+			}
+		}
+		else
+		{
+			// warn user that this is some middle part of a multi disk file
+	   		if(IDNO == MessageBoxA(0, "This file is the middle or end part of a "
+			   "multi-disk file. To join all parts\n"
+			   "to one file you have to start with the first part.\n\n"
+			   "Do you want to copy this part only?", 
+			   "EnsoniqFS � Warning", 
+			   MB_ICONWARNING | MB_YESNO))
+			{
+				return ERR_ABORTED;
+			}
+		}
+	}
 
 	// notify TotalCmd of progress
 	if(1==g_pProgressProc(g_iPluginNr, cSourceFN, cDestFN, 0))
@@ -325,6 +793,29 @@ int ReadEnsoniqFile(DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, char *cDestFN,
 		return ERR_NOT_OPEN;
 	}
 
+	// use length from directory entry as size; this can change for multi disk
+	// files once the first block has been read and the real file size is known
+	dwSize = pDirEntry->dwLen;
+
+	// set starting block
+	dwBlock = pDirEntry->dwStart;
+		
+	if(ucCopyMultidisk)
+	{
+		// read first block (instrument header)
+		iResult = ReadBlock(pDisk, dwBlock, ucBuf);
+		if(ERR_OK!=iResult)
+		{
+			LOG("Error reading block, code=%d.\n", iResult);
+			fclose(f);
+			return iResult;
+		}
+		
+		// get real size from instrument header
+		dwSize = ((DWORD)ucBuf[0x28] << 8) + (DWORD)ucBuf[0x29];
+		LOG("Reading multi disk file, real size=%d blocks.\n", dwSize); 
+	}
+		
 	// write EFE header to file	
 	LOG("Writing header... ");
 	memset(ucBuf, 0, 512);
@@ -334,12 +825,18 @@ int ReadEnsoniqFile(DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, char *cDestFN,
 	strcat(ucBuf, "\r\n");
 	ucBuf[0x31] = 0x1A;
 	ucBuf[0x32] = pDirEntry->ucType;
-	ucBuf[0x34] = (pDirEntry->dwLen>>8)&0xFF;
-	ucBuf[0x35] = (pDirEntry->dwLen)&0xFF;
+	ucBuf[0x34] = (dwSize>>8)&0xFF;
+	ucBuf[0x35] = (dwSize)&0xFF;
 	ucBuf[0x36] = (pDirEntry->dwContiguous>>8)&0xFF;
 	ucBuf[0x37] = (pDirEntry->dwContiguous)&0xFF;
 	ucBuf[0x38] = (pDirEntry->dwStart>>8)&0xFF;
 	ucBuf[0x39] = (pDirEntry->dwStart)&0xFF;
+	ucBuf[0x3A] = pDirEntry->ucMultiFileIndex;
+
+	// reset the multi disk field if we are about to copy all parts
+	// and merge them into one file which isn't multi disk anymore afterwards
+	if(ucCopyMultidisk) ucBuf[0x3A] = 0;
+	
 	if(512!=fwrite(ucBuf, 1, 512, f))
 	{
 		LOG("Error writing to destination file.\n");
@@ -349,11 +846,9 @@ int ReadEnsoniqFile(DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, char *cDestFN,
 
 	LOG("Extracting file... ");
 	
-	// set starting block
-	dwBlock = pDirEntry->dwStart;
-	
 	// loop through all blocks
-	for(i=0; i<(int)pDirEntry->dwLen; i++)
+	i = 0;
+	while(dwBlockCounter<dwSize)
 	{
 		// read next block from disk image
 		iResult = ReadBlock(pDisk, dwBlock, ucBuf);
@@ -380,10 +875,11 @@ int ReadEnsoniqFile(DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, char *cDestFN,
 		{
 			LOG("FAT entry=%d, i=%d, Len=%d - stopping.\n", dwBlock, i, 
 				pDirEntry->dwLen);
-			break;
+			i = pDirEntry->dwLen; // stop here even if file is too short
 		}
+		
 		// notify TotalCmd of progress
-		iProgress = i*100/pDirEntry->dwLen;
+		iProgress = i*100/dwSize;
 		if((iProgress-iLastProgress)>5)
 		{
 			if(1==g_pProgressProc(g_iPluginNr, cSourceFN, cDestFN, iProgress))
@@ -393,7 +889,33 @@ int ReadEnsoniqFile(DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, char *cDestFN,
 			}
 			iLastProgress = iProgress;
 		}
+		
+		i++;
+		dwBlockCounter++;
+		
+		// check counter in case of a multi-disk file
+		if(ucCopyMultidisk && (dwBlockCounter<dwSize))
+		{
+			// next disk?
+			if(i>=(int)pDirEntry->dwLen)
+			{
+				// ask user for next disk
+				iResult = SelectNextDisk(&pDisk, &dwBlock, pDirEntry);
+				if(ERR_OK!=iResult)
+				{
+					fclose(f);
+					return iResult;
+				}
+				
+				LOG("Multi-disk file: Continuing with next disk (%d)\n", 
+					pDirEntry->ucMultiFileIndex);
+				
+				// reset counter for current part
+				i = 0;
+			}
+		}
 	}
+	
 	LOG("OK.\n");
 	fclose(f);
 	
@@ -402,6 +924,9 @@ int ReadEnsoniqFile(DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, char *cDestFN,
 		return ERR_ABORTED;
 		
 	return ERR_OK;
+	
+	// TODO: Delete destination file if there was an abort or if multi disk
+	// copy was stopped
 }
 
 //----------------------------------------------------------------------------
@@ -511,202 +1036,6 @@ void FreeHandle(FIND_HANDLE *pHandle)
 {
 	// free allocated memory
 	free(pHandle);
-}
-
-int FixDirectoryEntries(DISK *pDisk, ENSONIQDIR *pDir)
-{
-	int i, iResult;
-	DWORD dwBlock;
-	
-	LOG("Fixing directory entries\n");
-		
-	for(i=0; i<39; i++)
-	{
-		if(0x00==pDir->ucDirectory[i*26+1]) continue; // skip blank entries
-		if(0x08==pDir->ucDirectory[i*26+1]) continue; // skip link to parent
-		if(0x02==pDir->ucDirectory[i*26+1]) continue; // skip subdirectories
-		
-		// calculate real length according to FAT
-	    pDir->Entry[i].dwLen = 0;
-		dwBlock = pDir->Entry[i].dwStart;
-		while(dwBlock>2)
-		{
-            pDir->Entry[i].dwLen++;
-			dwBlock = GetFATEntry(pDisk, dwBlock);    
-		}
-		
-		pDir->ucDirectory[i*26 + 14] = pDir->Entry[i].dwLen >> 8; 
-		pDir->ucDirectory[i*26 + 15] = pDir->Entry[i].dwLen & 0xFF;
-
-		LOG("%s: LEN = 0x%02X 0x%02X START = 0x%02X 0x%02X 0x%02X 0x%02X\n", 
-                 pDir->Entry[i].cName,
-                 pDir->ucDirectory[i*26 + 14],
-		         pDir->ucDirectory[i*26 + 15],
-                 pDir->ucDirectory[i*26 + 18],
-                 pDir->ucDirectory[i*26 + 19],
-                 pDir->ucDirectory[i*26 + 20],
-                 pDir->ucDirectory[i*26 + 21]); 
-                 
-		iResult = WriteBlocks(pDisk, pDir->dwDirectoryBlock, 2, pDir->ucDirectory);
-		if(ERR_OK!=iResult)
-		{
-			LOG("Error writing Ensoniq file, code=%d\n", iResult);
-			return ERR_WRITE;
-		}
-		iResult = CacheFlush(pDisk);
-		if(ERR_OK!=iResult)
-		{
-			LOG("Error flushing cache, code=%d\n", iResult);
-			return ERR_WRITE;
-		}
-	}
-	
-	return ERR_OK;
-}
-
-//----------------------------------------------------------------------------
-// ReadDirectory
-// 
-// Reads the directory starting with dwBlock from pDisk
-// 
-// -> pDisk: pointer to valid disk structure
-//    dwBlock: starting block
-//    pDir: ENSONIQDIR structure to receive directory listing
-//	  ucShowWarning: Show warning about bad file sizes
-// <- ERR_OK
-//    ERR_NOT_OPEN
-//    ERR_OUT_OF_BOUNDS
-//    ERR_READ
-//    ERR_MEM
-//    ERR_NOT_SUPPORTED
-//    ERR_SEEK
-//----------------------------------------------------------------------------
-int ReadDirectory(DISK *pDisk, ENSONIQDIR *pDir, unsigned char ucShowWarning)
-{
- 	char cWarningMsg[2048] = "Some files in this directory have invalid "
-		 "file sizes according to their directory\nentries. "
-		 "You should consider using ETools to scan and/or repair "
-		 "this disc.\n\n"
-		 "The following files have differing values for directory entry "
-		 "and size\ncalculation from FAT:\n\n";
-    char cWarning[256];
-    unsigned char ucWarningFlag = 0;
-	int iResult, i, iIndex;
-	DWORD dwBlock, dwLen;
-
-	LOG("ReadDirectory(block=%d)\n", pDir->dwDirectoryBlock);
-
-	// initialize ENSONIQDIR, but keep dwDirectoryBlock
-	dwBlock = pDir->dwDirectoryBlock;
-	memset(pDir, 0, sizeof(ENSONIQDIR));
-	pDir->dwDirectoryBlock = dwBlock;
-
-	// read directory blocks from disk
-	iResult = ReadBlocks(pDisk, dwBlock, 2, pDir->ucDirectory);
-	if(ERR_OK!=iResult) return iResult;
-
-	// loop through all entries
-//	LOG("\n");
-	for(i=0; i<39; i++)
-	{
-		pDir->Entry[i].ucType = pDir->ucDirectory[i*26+1];
-		memset(&(pDir->VirtualWaveEntry[i]), 0, sizeof(VIRTUALWAVEFILE));
-		
-/*
-		// debug output
-		LOG("Directory entry #"); LOG_HEX2(i); LOG(": ");
-		for(j=0; j<26; j++) 
-		{
-			LOG_HEX2(pDir->ucDirectory[i*26+j]);
-			LOG(" ");
-		}
-		LOG("\n");
-*/		
-		// check type
-		if(0x00==pDir->ucDirectory[i*26+1]) continue; // skip blank entries
-		if(0x08==pDir->ucDirectory[i*26+1]) continue; // skip link to parent
-
-		// copy name
-		strncpy(pDir->Entry[i].cName, pDir->ucDirectory+i*26+2, 12);
-		while(strlen(pDir->Entry[i].cName)<12)
-			strcat(pDir->Entry[i].cName, " ");
-		pDir->Entry[i].cName[12] = 0;
-		
-		strncpy(pDir->Entry[i].cLegalName, pDir->ucDirectory+i*26+2, 12);
-		MakeLegalName(pDir->Entry[i].cLegalName);
-
-		// calculate file properties
-		pDir->Entry[i].dwLen        = (pDir->ucDirectory[i*26 + 14]<<8)
-										 +  pDir->ucDirectory[i*26 + 15];
-		pDir->Entry[i].dwContiguous = (pDir->ucDirectory[i*26 + 16]<<8)
-										 +  pDir->ucDirectory[i*26 + 17];
-		pDir->Entry[i].dwStart      = (pDir->ucDirectory[i*26 + 18]<<24)
-										 + (pDir->ucDirectory[i*26 + 19]<<16)
-										 + (pDir->ucDirectory[i*26 + 20]<<8)  
-										 +  pDir->ucDirectory[i*26 + 21];
-										 
-		// calculate real length according to FAT
-	    dwLen = 0;
-		dwBlock = pDir->Entry[i].dwStart;
-		while(dwBlock>2)
-		{
-            dwLen++;
-			dwBlock = GetFATEntry(pDisk, dwBlock);    
-		}
-
-/*		LOG("%s: LEN = 0x%02X 0x%02X START = 0x%02X 0x%02X 0x%02X 0x%02X\n", 
-                 pDir->Entry[i].cName,
-                 pDir->ucDirectory[i*26 + 14],
-		         pDir->ucDirectory[i*26 + 15],
-                 pDir->ucDirectory[i*26 + 18],
-                 pDir->ucDirectory[i*26 + 19],
-                 pDir->ucDirectory[i*26 + 20],
-                 pDir->ucDirectory[i*26 + 21]);
-*/                 
-		if((dwLen!=pDir->Entry[i].dwLen)&&(pDir->Entry[i].ucType!=0x02))
-		{
-  		    LOG("Warning: for file '%s' length FAT (%d) != length directory entry (%d)\n",
-			    pDir->Entry[i].cName, dwLen, pDir->Entry[i].dwLen);
-			    
-		    sprintf(cWarning, "%s: %d blocks (dir) / %d blocks (FAT)\n",
-		        pDir->Entry[i].cName, (int)pDir->Entry[i].dwLen, (int)dwLen);
-		    strcat(cWarningMsg, cWarning);
-		    ucWarningFlag = 1;
-		}	 							   
-	}
-	
-	if(ucWarningFlag&&ucShowWarning)
-	{
-		strcat(cWarningMsg, "\n\nShould this problem be corrected?");
-   		if(IDYES == MessageBoxA(0, cWarningMsg, "EnsoniqFS � Warning", 
-		   MB_ICONWARNING | MB_YESNO))
-		{
-			if(ERR_OK!=FixDirectoryEntries(pDisk, pDir))
-			{
-		   		MessageBoxA(0, "Could not write directory.", "EnsoniqFS � Error", 
-				   MB_ICONSTOP);
-			}
-		}
- 	}
-	
-	// loop again through all entries to find ASR audio tracks and
-	// assign virtual wave files to them
-	iIndex = 0;
-	for(i=0; i<39; i++)
-	{
-		// skip all non-audio-track-files		
-		if(pDir->Entry[i].ucType != 0x1F) continue;
-		
-		// this is a new audio track
-		strcpy(pDir->VirtualWaveEntry[iIndex].cName, pDir->Entry[i].cName);
-		strcpy(pDir->VirtualWaveEntry[iIndex].cLegalName, pDir->Entry[i].cLegalName);
-		pDir->VirtualWaveEntry[iIndex].dwStart = pDir->Entry[i].dwStart;
-		pDir->VirtualWaveEntry[iIndex].dwContiguous = pDir->Entry[i].dwContiguous;
-		pDir->VirtualWaveEntry[iIndex].dwLen = pDir->Entry[i].dwLen;
-		iIndex++;
-	}
-	
-	return ERR_OK;
 }
 
 //----------------------------------------------------------------------------
@@ -1279,8 +1608,8 @@ DLLEXPORT BOOL __stdcall FsFindNext(HANDLE Handle, WIN32_FIND_DATA *FindData)
 	}
 
 	// skip empty entries and parent directories
-	while(((0x00==pHandle->EnsoniqDir.Entry[pHandle->iNextDirIndex-1].ucType)||
-		  (0x08==pHandle->EnsoniqDir.Entry[pHandle->iNextDirIndex-1].ucType))&&
+	while(((FILE_TYPE_EMPTY==pHandle->EnsoniqDir.Entry[pHandle->iNextDirIndex-1].ucType)||
+		  (FILE_TYPE_PARENT_DIRECTORY==pHandle->EnsoniqDir.Entry[pHandle->iNextDirIndex-1].ucType))&&
 		  (pHandle->iNextDirIndex<40))
 	{
 		pHandle->iNextDirIndex++;
@@ -1300,7 +1629,7 @@ DLLEXPORT BOOL __stdcall FsFindNext(HANDLE Handle, WIN32_FIND_DATA *FindData)
 		strcpy(FindData->cFileName, 
 			pHandle->EnsoniqDir.Entry[pHandle->iNextDirIndex-1].cLegalName);
 	
-		if(0x02==pHandle->EnsoniqDir.Entry[pHandle->iNextDirIndex-1].ucType)
+		if(FILE_TYPE_DIRECTORY==pHandle->EnsoniqDir.Entry[pHandle->iNextDirIndex-1].ucType)
 		{
 			FindData->dwFileAttributes = FILE_ATTRIBUTE_DIRECTORY;
 		}
@@ -1320,12 +1649,22 @@ DLLEXPORT BOOL __stdcall FsFindNext(HANDLE Handle, WIN32_FIND_DATA *FindData)
 	// virtual wave files
 	else if(pHandle->iNextDirIndex < 79)
 	{
-		// reformat filename including file type tag
-		sprintf(FindData->cFileName, "%s.wav",
-			pHandle->EnsoniqDir.VirtualWaveEntry[pHandle->iNextDirIndex-40].cLegalName);
+		// reformat filename 
+		if(pHandle->EnsoniqDir.VirtualWaveEntry[pHandle->iNextDirIndex-40].ucIsStereo)
+		{
+			sprintf(FindData->cFileName, "%s_STEREO.wav",
+				pHandle->EnsoniqDir.VirtualWaveEntry[pHandle->iNextDirIndex-40].cLegalName);
+			FindData->nFileSizeLow = 
+				(pHandle->EnsoniqDir.VirtualWaveEntry[pHandle->iNextDirIndex-40].dwLen1)*1024;
+		}
+		else
+		{
+			sprintf(FindData->cFileName, "%s.wav",
+				pHandle->EnsoniqDir.VirtualWaveEntry[pHandle->iNextDirIndex-40].cLegalName);
+			FindData->nFileSizeLow = 
+				(pHandle->EnsoniqDir.VirtualWaveEntry[pHandle->iNextDirIndex-40].dwLen1)*512;
+		}
 		FindData->dwFileAttributes = FILE_ATTRIBUTE_NORMAL;
-		FindData->nFileSizeLow = 
-			(pHandle->EnsoniqDir.VirtualWaveEntry[pHandle->iNextDirIndex-40].dwLen+1)*512;
 		
 		// add size of wave file header
 		FindData->nFileSizeLow += 44;
@@ -1819,7 +2158,7 @@ void AddToImageList(char *cName)
 DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName, 
 								  int CopyFlags)
 {
-	unsigned char ucBuf[512], ucType, *ucCurrentDir;
+	unsigned char ucBuf[512], ucType, *ucCurrentDir, ucMultiFileIndex;
 	DWORD dwFilesize, dwStart, dwContiguous;
 	char cName[17], cName2[13], cText[512];
 	int iResult, i, j, iEntry;
@@ -1902,7 +2241,7 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 	// check file type
 	ucType = ucBuf[0x32];
 	LOG("OK.\nChecking file signature: ");
-	if((ucBuf[0x00]!=0x0D) || (ucBuf[0x01]!=0x0A) || (ucType>34))
+	if((ucBuf[0x00]!=0x0D) || (ucBuf[0x01]!=0x0A) || (ucType>50))
 	{
 		LOG("Not an EFE file.\n");
 		
@@ -1914,6 +2253,7 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 	}
 	
 	dwFilesize = (ucBuf[0x34]<<8) + ucBuf[0x35];
+	ucMultiFileIndex = ucBuf[0x3A];
 	memset(cName, 0, 17); strncpy(cName, ucBuf+0x12, 12);
 	while(strlen(cName)<12) strcat(cName, " ");
 	LOG("OK, name='%s', type=%d, size=%d blocks.\n", cName, ucType, dwFilesize);
@@ -1975,7 +2315,7 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 	{
 		for(i=0; i<39; i++)
 		{
-			if(0==Handle.EnsoniqDir.Entry[i].ucType)
+			if(FILE_TYPE_EMPTY==Handle.EnsoniqDir.Entry[i].ucType)
 			{
 				iEntry = i;
 				break;
@@ -2020,7 +2360,7 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 	ucCurrentDir[iEntry*26+19] = (dwStart>>16) & 0xFF;
 	ucCurrentDir[iEntry*26+20] = (dwStart>> 8) & 0xFF;
 	ucCurrentDir[iEntry*26+21] = (dwStart    ) & 0xFF;
-
+	ucCurrentDir[iEntry*26+22] = ucMultiFileIndex;
 	// write current directory
 	LOG("OK.\nWriting current directory: ");
 	if(ERR_OK!=WriteBlocks(Handle.pDisk, Handle.EnsoniqDir.dwDirectoryBlock,
@@ -2124,15 +2464,29 @@ DLLEXPORT int __stdcall FsGetFile(char* RemoteName, char* LocalName,
 	
 	if(-1==iEntry)
 	{
-		for(i=0; i<39; i++)
+		for(i=0; i<58; i++)
 		{
-			sprintf(cLegalName, "%s.WAV",
-				Handle.EnsoniqDir.VirtualWaveEntry[i].cLegalName);
-			
-			// file found?
-			if(0==strcmp(cName, cLegalName))
+			if(Handle.EnsoniqDir.VirtualWaveEntry[i].ucIsStereo)
 			{
-				iEntry = i; ucIsVirtualWaveFile = 1; break;
+				sprintf(cLegalName, "%s_STEREO.WAV",
+					Handle.EnsoniqDir.VirtualWaveEntry[i].cLegalName);
+				
+				// file found?
+				if(0==strcmp(cName, cLegalName))
+				{
+					iEntry = i; ucIsVirtualWaveFile = 1; break;
+				}
+			}
+			else
+			{
+				sprintf(cLegalName, "%s.WAV",
+					Handle.EnsoniqDir.VirtualWaveEntry[i].cLegalName);
+				
+				// file found?
+				if(0==strcmp(cName, cLegalName))
+				{
+					iEntry = i; ucIsVirtualWaveFile = 1; break;
+				}
 			}
 		}
 	}
@@ -2142,6 +2496,7 @@ DLLEXPORT int __stdcall FsGetFile(char* RemoteName, char* LocalName,
 		LOG("Error: file not found.\n");
 		return FS_FILE_NOTFOUND;
 	}
+	
 	// read file to local disk
 	if(!ucIsVirtualWaveFile)
 	{
@@ -2448,7 +2803,7 @@ DLLEXPORT BOOL __stdcall FsMkDir(char* Path)
 		if(0==strncmp(cNewDir, Handle.EnsoniqDir.Entry[i].cName, 
 			strlen(cNewDir)))
 		{
-			if(0x02==Handle.EnsoniqDir.Entry[i].ucType) return FALSE;
+			if(FILE_TYPE_DIRECTORY==Handle.EnsoniqDir.Entry[i].ucType) return FALSE;
 		}
 	}
 	
@@ -2456,7 +2811,7 @@ DLLEXPORT BOOL __stdcall FsMkDir(char* Path)
 	iNextFreeEntryInCurrentDir = -1;
 	for(i=0; i<39; i++)
 	{
-		if(0x00==ucCurrentDir[i*26+1])
+		if(FILE_TYPE_EMPTY==ucCurrentDir[i*26+1])
 		{
 			iNextFreeEntryInCurrentDir = i;
 			break;
@@ -2669,7 +3024,7 @@ DLLEXPORT void __stdcall FsSetDefaultParams(FsDefaultParamStruct* dps)
 DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 	BOOL OverWrite, RemoteInfoStruct* ri)
 {
-	unsigned char ucType, *ucOldDir, *ucNewDir;
+	unsigned char ucType, *ucOldDir, *ucNewDir, ucMultiFileIndex;
 	FIND_HANDLE OldHandle, NewHandle;
 	char cOldName[260], cNewName[260], cEOldName[260], cENewName[260], 
 		cTemp[260];
@@ -2736,6 +3091,7 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 		if(0==strcmp(cOldName, cTemp))
 		{
 			iOldEntry = i;
+			ucMultiFileIndex = OldHandle.EnsoniqDir.Entry[i].ucMultiFileIndex;
 			ucType = OldHandle.EnsoniqDir.Entry[i].ucType;
 			dwFilesize = OldHandle.EnsoniqDir.Entry[i].dwLen;
 			break;
@@ -2784,7 +3140,7 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 		// search for free entry
 		for(i=0; i<39; i++)
 		{
-			if(0==NewHandle.EnsoniqDir.Entry[i].ucType)
+			if(FILE_TYPE_EMPTY==NewHandle.EnsoniqDir.Entry[i].ucType)
 			{
 				iNewEntry = i;
 				break;
@@ -2910,7 +3266,8 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 		ucNewDir[iNewEntry*26+19] = (dwNewStart>>16) & 0xFF;
 		ucNewDir[iNewEntry*26+20] = (dwNewStart>> 8) & 0xFF;
 		ucNewDir[iNewEntry*26+21] = (dwNewStart    ) & 0xFF;
-
+		ucNewDir[iNewEntry*26+21] = ucMultiFileIndex;
+		
 		// write new directory
 		if(ERR_OK!=WriteBlocks(NewHandle.pDisk, 
 			NewHandle.EnsoniqDir.dwDirectoryBlock, 2, ucNewDir))
