@@ -39,7 +39,7 @@
 #include "progressdlg.h"
 #include "log.h"
 #include "error.h"
-#include "rsrc.h"
+#include "resource.h"
 
 //----------------------------------------------------------------------------
 // global flags and variables

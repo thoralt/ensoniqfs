@@ -37,20 +37,27 @@
 
 #define DLLEXPORT __declspec (dllexport)
 
+#define FILE_TYPE_EMPTY				0x00
+#define FILE_TYPE_DIRECTORY			0x02
+#define FILE_TYPE_PARENT_DIRECTORY	0x08
+#define FILE_TYPE_ASR_AUDIOTRACK	0x1F
+
 //----------------------------------------------------------------------------
 // structs for Ensoniq directory
 //----------------------------------------------------------------------------
 typedef struct _ENSONIQDIRENTRY
 {
 	char cName[13], cLegalName[13];
-	unsigned char ucType;
+	unsigned char ucType, ucMultiFileIndex;
 	DWORD dwContiguous, dwStart, dwLen;
 } ENSONIQDIRENTRY;
 
 typedef struct _VIRTUALWAVEFILE
 {
 	char cName[13], cLegalName[13];
-	DWORD dwContiguous, dwStart, dwLen;
+	DWORD dwContiguous1, dwStart1, dwLen1;
+	DWORD dwContiguous2, dwStart2, dwLen2;
+	unsigned char ucIsStereo;
 } VIRTUALWAVEFILE;
 
 typedef struct _ENSONIQDIR
@@ -58,7 +65,7 @@ typedef struct _ENSONIQDIR
 	ENSONIQDIRENTRY Entry[39];
 	unsigned char ucDirectory[1024];
 	DWORD dwDirectoryBlock;
-	VIRTUALWAVEFILE VirtualWaveEntry[39];	
+	VIRTUALWAVEFILE VirtualWaveEntry[58]; // max. 39 waves + 19 stereo pairs	
 } ENSONIQDIR;
 
 //----------------------------------------------------------------------------
