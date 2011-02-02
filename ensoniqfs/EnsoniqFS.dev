@@ -1,7 +1,7 @@
 [Project]
 FileName=EnsoniqFS.dev
 Name=EnsoniqFS
-UnitCount=25
+UnitCount=26
 Type=3
 Ver=1
 ObjFiles=
@@ -9,7 +9,7 @@ Includes=
 Libs=
 PrivateResource=EnsoniqFS_private.rc
 ResourceIncludes=
-MakeIncludes=
+MakeIncludes=MakeZIP.mak
 Compiler=-DBUILDING_DLL=1 -Wall -W_@@_
 CppCompiler=-DBUILDING_DLL=1_@@_
 Linker=--no-export-all-symbols --add-stdcall-alias -lcomdlg32_@@_
@@ -292,4 +292,13 @@ Link=0
 Priority=1000
 OverrideBuildCmd=0
 BuildCmd=
+
+[Unit26]
+FileName=MakeZIP.mak
+Folder=
+Compile=0
+Link=0
+Priority=1000
+OverrideBuildCmd=1
+BuildCmd=<override this command>
 

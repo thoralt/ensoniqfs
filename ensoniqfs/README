@@ -20,17 +20,17 @@ With EnsoniqFS you can mount the following Ensoniq file systems:
 - SCSI & IDE harddisks
 - SCSI & IDE removable disks (i. e. ZIP drives)
 - SCSI & IDE CDROMs
-- floppy disks (direct file access, using driver OmniFlop, see below)
+- floppy disks (direct file access using driver OmniFlop, see below)
 - image files ISO, IMG, Mode1CDROM (BIN), GKH, EDE, EDA, EDT, EDV
 
-Once mounted, on a file system you can do the following with Total Commander:
+Once mounted, you can do the following with Total Commander:
 - read, write, copy, move, rename, delete files on Ensoniq media
 - copy, move files from/to Windows drives
 - create, rename, copy, move whole directories
 
 CDROMs and BIN (Mode1 CDROM images)/GKH/EDE/EDA/EDT/EDV files are read only, 
 writing is not supported (write support for the image files could be 
-implemented in the future).
+implemented in the future). Full write support is available for ISO images.
 
 With the above, you get a complete file manager for Ensoniq disks.
 
@@ -47,16 +47,15 @@ interested, you can check out the source codes as well.
 3 Installation
 --------------
 
-3.1 EnsoniqFS, ETools
+3.1 EnsoniqFS
 
 To use EnsoniqFS, you first need to have Total Commander installed. Download
 your copy from http://www.ghisler.com. Installation is straightforward, there
 shouldn't be any problems. Be sure to get the latest version (6.5 minimum).
 
-Then, run the installer for EnsoniqFS (which you should have downloaded from
-SourceForge). Every file will be copied to its location, the INI file of
-Total Commander will be modified. You will have to restart Total Commander 
-after installation to gain access to the plugin.
+Install EnsoniqFS (which you should have downloaded from SourceForge) by 
+opening the ZIP file from within Total Commander. This is also the preferred 
+method for updates, since Total Commander handles all the files automatically.
 
 3.2 OmniFlop driver
 
@@ -71,6 +70,11 @@ http://www.shlock.co.uk/Utils/OmniFlop/OmniFlop.htm
 
 The driver package comes with detailed installation instructions. Be sure to
 read them and follow them closely.
+
+###############################################################################
+TODO:
+	Licensing of omniflop?
+###############################################################################
 
 Now you're just one step far from being able to use the driver. You need a
 license to use it with EnsoniqFS. Don't be afraid - the license is free and
@@ -106,6 +110,11 @@ disks".
 Along with that, you should see entries "Options", "Rescan devices" and "Run
 Ensoniq Filesystem Tools" (see below for an explanation).
 
+###############################################################################
+TODO:
+	Vista/Windows 7: Run TC with Admin rights
+###############################################################################
+
 4.1.1 CDROMs
 
 If you insert an Ensoniq formatted CDROM into any of your CDROM drives or if
@@ -119,7 +128,7 @@ Initially, the image folder is empty. To add and remove image files, go one
 level up to the main directory of EnsoniqFS and call the "Options" dialog
 (see 4.1.4). 
 
-Once an image is mounted, it should show up in the "Image files" folder. You
+Once an image is mounted, it will show up in the "Image files" folder. You
 can browse it with Total Commander the same way as you do with other folders
 and files.
 

@@ -3369,6 +3369,9 @@ BOOL APIENTRY DllMain (HINSTANCE hInst /*Library instance handle.*/,
 			g_hInst = hInst;
 
 			// create memory mapped file
+			// this is to detect several running instances (also used within
+			// ETools) to display a warning (the first instance locks all
+			// devices it can get)
 			LOG("Creating memory mapped file: ");
 			g_hMemoryMappedFile = CreateFileMapping(
 				INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 
@@ -3389,6 +3392,10 @@ BOOL APIENTRY DllMain (HINSTANCE hInst /*Library instance handle.*/,
 			{
 				dwInitSharedMemory = 1;
 				LOG("This is the first instance.\n");
+			}
+			else
+			{
+// TODO: Display warning "already running"
 			}
 			
 			// get the buffer
@@ -3446,3 +3453,5 @@ BOOL APIENTRY DllMain (HINSTANCE hInst /*Library instance handle.*/,
 	// function (I do not want to disable this warning for the whole project)
 	reserved = reserved;
 }
+// TODO: Detect if disk access is forbidden because of missing Admin priviledges,
+//       encourage user to start with Admin rights
