@@ -110,6 +110,46 @@ disks".
 Along with that, you should see entries "Options", "Rescan devices" and "Run
 Ensoniq Filesystem Tools" (see below for an explanation).
 
+How does EnsoniqFS deal with multi-disk files?
+
+Simply put, a multi-disk file is an instrument, which doesn't fit on one floppy
+disk. The Ensoniq samplers automatically split a large instrument while saving, 
+so it fills the disk to their maximum. When loading, the sampler asks for all
+disks sequentially and loads the instrument from it parts.
+
+Multi-disk file parts all reside in the root directory of a disk. Although it
+is possible to put these parts into subdirectories with EnsoniqFS, your sampler
+will most likely have problems with that. Ensoniq samplers put multi-disk files
+into the root directory, and so should you.
+
+When you copy multi-disk files, three cases are possible:
+	
+(a) Copy multi-disk from Ensoniq media to Windows media
+
+If you copy the first part of a multi-disk file from Ensoniq media to a Windows
+drive, EnsoniqFS will ask you whether to enter multi-disk mode or to copy the
+file as single part. If you choose multi-disk, after the first part you will
+be asked to provide the location of the next part (which can be on the same
+disk or another one; you can also exchange disks, if necessary). EnsoniqFS 
+automatically merges all parts into one single file.
+
+You can also choose to copy only one single part of a multi-disk file. This way
+EnsoniqFS will not ask for the next part and will not try to merge all parts
+together.
+	
+(b) Copy multi-disk parts to Ensoniq media
+
+(c) split large instruments into multi-disk files
+
+###############################################################################
+TODO:
+	Explain file naming [xx]
+	ASR audio tracks
+	EnsoniqUnpackerEFE
+###############################################################################
+
+
+
 ###############################################################################
 TODO:
 	Vista/Windows 7: Run TC with Admin rights
@@ -172,7 +212,7 @@ checkbox. You can update the device list manually (see below).
 
 [ ] Enable logging to C:\EnsoniqFS-LOG.txt
 If you activate this option, the EnsoniqFS plugin will create a log file at
-yor C: drive. EnsoniqFS will then write extensive logging information to this
+your C: drive. EnsoniqFS will then write extensive logging information to this
 file. This logging information can come handy for the developer if you've found
 some bug. Note: activating this option slows down EnsoniqFS, and the log file
 can grow quite fast to megabytes.
@@ -180,8 +220,8 @@ can grow quite fast to megabytes.
 
 If you select an image file from the dropdown box at the bottom of the options
 dialog, you can click on the "Unmount selected image" button to remove that
-image file from the list. With "Mount new image..." you can mount new image
-files.
+image file from the list. With "Mount new image..." you can add new image files
+to the list.
 
 4.1.5 Rescan devices
 
@@ -203,10 +243,8 @@ restore/format/check/repair tool (see below for a description).
 ETools is a piece of software which can do the following things for you:
 - completely backup an Ensoniq drive to an ISO file
 - restore ISO file to drive
-- format drive (at the moment, only QuickFormat is supported - this will be
-  changed soon)
+- format drive (at the moment, only QuickFormat is supported
 - check Ensoniq file systems for errors and fix these errors if possible
-  (this function will also be improved in the next time)
   
 To operate on a drive, first select it from the dropdown list on top of the
 application. Then choose either to backup, restore, check or format this drive.
@@ -219,7 +257,7 @@ drive to a lower capacity and don't want to have a huge full drive backup.
 
 5 Bugs and contact
 
-If you find any bugs, please don't hesitate to tell us! To keep the best
+If you find any bugs, please don't hesitate to tell me! To keep the best
 overview, I ask you to file a bug report on the SourceForge page of this
 project if you find something odd. You can also directly send a mail to
 ensoniqfs/at/thoralt.de (substitute /at/ with @ to get a valid email address,
