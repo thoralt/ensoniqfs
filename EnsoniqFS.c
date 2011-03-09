@@ -2245,7 +2245,8 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 	{
 		LOG("Not an EFE file.\n");
 		
-		sprintf(cText, "Error: The file type of \"%s\" is not supported.", 
+		sprintf(cText, "Error: The file type of \"%s\" is not supported "
+			"(not a valid EFE file).", 
 			LocalName);
 		MessageBoxA(0, cText, "EnsoniqFS · Warning", MB_ICONWARNING);
 		fclose(f);
@@ -2254,6 +2255,23 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 	
 	dwFilesize = (ucBuf[0x34]<<8) + ucBuf[0x35];
 	ucMultiFileIndex = ucBuf[0x3A];
+	
+	// check multi-disk index: warn if destination is not root directory
+	LOG("ucMultiFileIndex=%d, GetDirectoryLevel()=%d\n", ucMultiFileIndex, 
+		GetDirectoryLevel(RemoteName));
+	if(ucMultiFileIndex)
+	{
+		if(GetDirectoryLevel(RemoteName)>3)
+		{
+			if(IDYES!=MessageBoxA(0, "You are trying to copy a part of a multi-disk file\n"
+				"to a subdirectory. Ensoniq samplers will only read\n"
+				"this file if it is located in the root directory.\n\n"
+				"Continue anyway?", "EnsoniqFS · Warning", MB_ICONWARNING|MB_YESNO))
+				return FS_FILE_WRITEERROR;
+		}
+	}
+#warning TODO: Implement multi-disk write
+	
 	memset(cName, 0, 17); strncpy(cName, ucBuf+0x12, 12);
 	while(strlen(cName)<12) strcat(cName, " ");
 	LOG("OK, name='%s', type=%d, size=%d blocks.\n", cName, ucType, dwFilesize);
@@ -2335,7 +2353,7 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 	
 	LOG("Writing file: ");
 	
-	// do the copy with another function
+	// do the copying with another function
 	iResult = CopyEnsoniqFile(Handle.pDisk, COPY_DOS, f, 0, 0, dwFilesize, 
 		&dwStart, &dwContiguous, LocalName, RemoteName);
 	fclose(f);
