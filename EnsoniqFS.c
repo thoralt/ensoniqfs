@@ -2794,9 +2794,19 @@ DLLEXPORT BOOL __stdcall FsMkDir(char* Path)
 	strncpy(Handle.cPath, Path, i);
 	strcpy(cNewDir, Path+i+1);
 	
-	for(i=strlen(Handle.cPath); i>0; i--) if('\\'==Handle.cPath[i]) break;
+	// isolate parent dir
+	if (GetDirectoryLevel( Handle.cPath ) == 2)
+	{
+		// root level of ensoniq device
+		strcpy(cCurrentDir, "ROOT");
+	}
+	else
+	{
+		for(i=strlen(Handle.cPath); i>0; i--) if('\\'==Handle.cPath[i]) break;
 	strcpy(cCurrentDir, Handle.cPath+i+1);
+	}
 	cCurrentDir[12] = 0x00;
+	
 	while(strlen(cCurrentDir)<12) strcat(cCurrentDir, " ");
 	
 	
@@ -2804,7 +2814,7 @@ DLLEXPORT BOOL __stdcall FsMkDir(char* Path)
 	cNewDir[12] = 0x00;
 	while(strlen(cNewDir)<12) strcat(cNewDir, " ");
 
-	LOG("Path='%s', Dir='%s'\n", Handle.cPath, cNewDir);
+	LOG("Path='%s', NewDir='%s', CurrentDir='%s'\n", Handle.cPath, cNewDir, cCurrentDir);
 
 	// read current directory
 	iResult = ReadDirectoryFromPath(&Handle, 0);
