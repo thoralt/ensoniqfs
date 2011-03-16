@@ -3294,7 +3294,7 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 		ucNewDir[iNewEntry*26+19] = (dwNewStart>>16) & 0xFF;
 		ucNewDir[iNewEntry*26+20] = (dwNewStart>> 8) & 0xFF;
 		ucNewDir[iNewEntry*26+21] = (dwNewStart    ) & 0xFF;
-		ucNewDir[iNewEntry*26+21] = ucMultiFileIndex;
+		ucNewDir[iNewEntry*26+22] = ucMultiFileIndex;
 		
 		// write new directory
 		if(ERR_OK!=WriteBlocks(NewHandle.pDisk, 
