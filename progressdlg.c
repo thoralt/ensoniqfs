@@ -67,7 +67,7 @@ void ProgressDialogThread(void *dummy)
 	LOG("ProgressDialogThread() started. ");
 	
     // create the dialog window
-	m_hProgressWnd = CreateDialog(g_hInst, MAKEINTRESOURCE(IDD_DLG_PROGRESS), 0, 0);
+	m_hProgressWnd = CreateDialog(g_hInst, MAKEINTRESOURCE(IDD_DLG_PROGRESS), TC_HWND, 0);
 	hWnd = m_hProgressWnd;
 	if(hWnd!=NULL)
 	{

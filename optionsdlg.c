@@ -284,7 +284,7 @@ void OptionsDlg_UnmountImage(HWND hWnd)
 	iSelectedItem = lResult;
 	if(CB_ERR==lResult)
 	{
-		MessageBoxA(0, "Please select an image file first.", 
+		MessageBoxA(TC_HWND, "Please select an image file first.", 
 			"EnsoniqFS · Warning", MB_OK|MB_ICONEXCLAMATION);
 		return;
 	}

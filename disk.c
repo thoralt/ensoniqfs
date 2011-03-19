@@ -1849,7 +1849,8 @@ BOOL EnableExtendedFormats(const char *szDrive, BOOL bEnable)
 
 		if(ERROR_INVALID_FUNCTION==dwError)
 		{
-			MessageBoxA(GetProgressDialogHwnd(),
+			ShowWindow(GetProgressDialogHwnd(), SW_HIDE);
+			MessageBoxA(TC_HWND,
 				"The OmniFlop driver could not be found.\n"
 				"If you want to use floppy disk access, you need\n"
 				"to install OmniFlop (see the readme file for how\n"
@@ -1857,16 +1858,19 @@ BOOL EnableExtendedFormats(const char *szDrive, BOOL bEnable)
 				"Alternatively, you can disable floppy disk access\n"
 				"in the options dialog to suppress this warning.", 
 				"EnsoniqFS · Warning", MB_OK|MB_ICONEXCLAMATION);
+			ShowWindow(GetProgressDialogHwnd(), SW_SHOW);
 		}
 
 		if(ERROR_ACCESS_DENIED==dwError)
 		{
-			MessageBoxA(GetProgressDialogHwnd(),
+			ShowWindow(GetProgressDialogHwnd(), SW_HIDE);
+			MessageBoxA(TC_HWND,
 				"The OmniFlop driver is missing a valid\n"
 				"license. Please see the readme file for how to\n"
 				"obtain this license (it's free and takes only\n"
 				"a few minutes).",
 				"EnsoniqFS · Warning", MB_OK|MB_ICONEXCLAMATION);
+			ShowWindow(GetProgressDialogHwnd(), SW_SHOW);
 		}
 
 		return FALSE;
