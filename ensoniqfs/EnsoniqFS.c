@@ -278,12 +278,12 @@ int ReadDirectory(DISK *pDisk, ENSONIQDIR *pDir, unsigned char ucShowWarning)
 	if(ucWarningFlag&&ucShowWarning)
 	{
 		strcat(cWarningMsg, "\n\nShould this problem be corrected?");
-   		if(IDYES == MessageBoxA(0, cWarningMsg, "EnsoniqFS · Warning", 
+   		if(IDYES == MessageBoxA(TC_HWND, cWarningMsg, "EnsoniqFS · Warning", 
 		   MB_ICONWARNING | MB_YESNO))
 		{
 			if(ERR_OK!=FixDirectoryEntries(pDisk, pDir))
 			{
-		   		MessageBoxA(0, "Could not write directory.", "EnsoniqFS · Error", 
+		   		MessageBoxA(TC_HWND, "Could not write directory.", "EnsoniqFS · Error", 
 				   MB_ICONSTOP);
 			}
 		}
@@ -589,7 +589,7 @@ int SelectNextDisk(DISK **pDisk, DWORD *dwBlock, ENSONIQDIRENTRY *pDirEntry)
 	{
 		// ask user for new disk
 		pNewDisk = 0;
-		iResult = CreateChooseDiskDialogModal(0, &pNewDisk, *pDisk);
+		iResult = CreateChooseDiskDialogModal(TC_HWND, &pNewDisk, *pDisk);
 		if((iResult==IDCANCEL)||(pNewDisk==0))
 		{
 			return ERR_ABORTED;
@@ -606,7 +606,7 @@ int SelectNextDisk(DISK **pDisk, DWORD *dwBlock, ENSONIQDIRENTRY *pDirEntry)
 		if(0==g_pDiskListRoot)
 		{
 			free(cMsDosName);
-			if(IDCANCEL==MessageBoxA(0, 
+			if(IDCANCEL==MessageBoxA(TC_HWND, 
 				"There was an error during device scan. "
 				"Try again?", "EnsoniqFS · Warning", 
 				MB_ICONWARNING | MB_RETRYCANCEL))
@@ -621,7 +621,7 @@ int SelectNextDisk(DISK **pDisk, DWORD *dwBlock, ENSONIQDIRENTRY *pDirEntry)
 		free(cMsDosName);
 		if(0==pNewDisk)
 		{
-			if(IDCANCEL==MessageBoxA(0, 
+			if(IDCANCEL==MessageBoxA(TC_HWND, 
 				"The selected disk could not be found. "
 				"Try again?", "EnsoniqFS · Warning", 
 				MB_ICONWARNING | MB_RETRYCANCEL))
@@ -636,7 +636,7 @@ int SelectNextDisk(DISK **pDisk, DWORD *dwBlock, ENSONIQDIRENTRY *pDirEntry)
 		e.dwDirectoryBlock = 3;
 		if(ERR_OK!=ReadDirectory(pNewDisk, &e, 0))
 		{
-			if(IDCANCEL==MessageBoxA(0, 
+			if(IDCANCEL==MessageBoxA(TC_HWND, 
 				"Could not read the selected disk. "
 				"Retry?", "EnsoniqFS · Warning", 
 				MB_ICONWARNING | MB_RETRYCANCEL))
@@ -668,7 +668,7 @@ int SelectNextDisk(DISK **pDisk, DWORD *dwBlock, ENSONIQDIRENTRY *pDirEntry)
 		// Did we reach the end of the directory without finding our file?
 		if(i>=39)
 		{
-			if(IDCANCEL==MessageBoxA(0, 
+			if(IDCANCEL==MessageBoxA(TC_HWND, 
 				"Could not find the multi disk file on the selected disk. "
 				"Retry?", "EnsoniqFS · Warning", 
 				MB_ICONWARNING | MB_RETRYCANCEL))
@@ -685,7 +685,7 @@ int SelectNextDisk(DISK **pDisk, DWORD *dwBlock, ENSONIQDIRENTRY *pDirEntry)
 				"The selected disk contains the requested file, but this\n"
 				"is part %d instead of %d. Retry?", 
 				pe->ucMultiFileIndex, pDirEntry->ucMultiFileIndex+1);
-			if(IDCANCEL==MessageBoxA(0, 
+			if(IDCANCEL==MessageBoxA(TC_HWND, 
 				cMessage, "EnsoniqFS · Warning", 
 				MB_ICONWARNING | MB_RETRYCANCEL))
 			{
@@ -747,7 +747,7 @@ int ReadEnsoniqFile(DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, char *cDestFN,
 		// ask if multi disk copy is required
 		if(1==pDirEntry->ucMultiFileIndex)
 		{
-	   		i = MessageBoxA(0, "This file is the first part of a "
+	   		i = MessageBoxA(TC_HWND, "This file is the first part of a "
 			   "multi-disk file. To merge all parts\n"
 			   "into one file make sure you have\n"
 			   " (a) all necessary removable disks ready\n"
@@ -769,7 +769,7 @@ int ReadEnsoniqFile(DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, char *cDestFN,
 		else
 		{
 			// warn user that this is some middle part of a multi disk file
-	   		if(IDNO == MessageBoxA(0, "This file is the middle or end part of a "
+	   		if(IDNO == MessageBoxA(TC_HWND, "This file is the middle or end part of a "
 			   "multi-disk file. To join all parts\n"
 			   "to one file you have to start with the first part.\n\n"
 			   "Do you want to copy this part only?", 
@@ -1389,7 +1389,7 @@ DLLEXPORT int __stdcall FsExecuteFile(HWND MainWin, char* RemoteName,
 		
 		if(0==CreateProcess(cPath, cArg, 0, 0, 0, 0, 0, 0, &si, &pi))
 		{
-			MessageBoxA(0, "Could not start ETools.exe.", "EnsoniqFS · Error",
+			MessageBoxA(TC_HWND, "Could not start ETools.exe.", "EnsoniqFS · Error",
 				MB_ICONSTOP);
 		}
 		else
@@ -1822,7 +1822,7 @@ int CopyEnsoniqFile(DISK *pDestDisk, int iMode, FILE *f, DISK *pSourceDisk,
 		dwWriteBlock = dwStart;
 		if(0==dwStart)
 		{
-			MessageBoxA(0, "The disk is full.", 
+			MessageBoxA(TC_HWND, "The disk is full.", 
 				"EnsoniqFS · Warning", MB_ICONWARNING);
 			return FS_FILE_WRITEERROR;
 		}
@@ -1935,7 +1935,7 @@ int CopyEnsoniqFile(DISK *pDestDisk, int iMode, FILE *f, DISK *pSourceDisk,
 						}
 						CacheFlush(pDestDisk);
 	
-						MessageBoxA(0, "The disk is full or not writable.", 
+						MessageBoxA(TC_HWND, "The disk is full or not writable.", 
 							"EnsoniqFS · Warning", MB_ICONWARNING);
 						return FS_FILE_WRITEERROR;
 					}
@@ -2036,7 +2036,7 @@ void AddToImageList(char *cName)
 		dwError = GetLastError();
 		LOG("failed: "); LOG_ERR(dwError);
 		
-		MessageBoxA(0, "Could not open file.", "EnsoniqFS · Error", 
+		MessageBoxA(TC_HWND, "Could not open file.", "EnsoniqFS · Error", 
 			MB_OK | MB_ICONSTOP);
 		return;
 	}
@@ -2047,7 +2047,7 @@ void AddToImageList(char *cName)
 	{
 		LOG("Image format unknown.\n");
 		
-		MessageBoxA(0, "The format of the image file could not be "
+		MessageBoxA(TC_HWND, "The format of the image file could not be "
 			"determined. Only the \n"
 			"following types are supported:\n\n"
 			"    · ISO format (plain disk image)\n"
@@ -2116,7 +2116,7 @@ void AddToImageList(char *cName)
 			if(0==strncmp(pLine->cLine, "image=", 6)) iImageFileCounter++;	
 			if(0==strncmp(pLine->cLine, cText, strlen(cText)))
 			{
-				MessageBoxA(0, "This file is already in the list of image "
+				MessageBoxA(TC_HWND, "This file is already in the list of image "
 					"files.\nIt can not be mounted twice.",
 					"EnsoniqFS · Warning", MB_ICONWARNING);
 				pTempLine = NULL;
@@ -2129,7 +2129,7 @@ void AddToImageList(char *cName)
 		// check counter
 		if(iImageFileCounter>MAX_IMAGE_FILES)
 		{
-			MessageBoxA(0, "The maximum mounted image count has been "
+			MessageBoxA(TC_HWND, "The maximum mounted image count has been "
 				"reached.\n"
 				"Please delete at least one image before adding new ones.",
 				"EnsoniqFS · Warning", MB_ICONWARNING);
@@ -2213,7 +2213,7 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 	// the image file list?
 	if(0==strcmp(Handle.cPath, "\\Image files"))
 	{
-		if(IDNO==MessageBoxA(0, "This will add the file to the list "
+		if(IDNO==MessageBoxA(TC_HWND, "This will add the file to the list "
 			"of mounted\nimages in EnsoniqFS.\n\n"
 			"Do you want to continue?", "EnsoniqFS", MB_ICONQUESTION|MB_YESNO))
 		{
@@ -2248,7 +2248,7 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 		sprintf(cText, "Error: The file type of \"%s\" is not supported "
 			"(not a valid EFE file).", 
 			LocalName);
-		MessageBoxA(0, cText, "EnsoniqFS · Warning", MB_ICONWARNING);
+		MessageBoxA(TC_HWND, cText, "EnsoniqFS · Warning", MB_ICONWARNING);
 		fclose(f);
 		return FS_FILE_NOTSUPPORTED;
 	}
@@ -2263,7 +2263,7 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 	{
 		if(GetDirectoryLevel(RemoteName)>3)
 		{
-			if(IDYES!=MessageBoxA(0, "You are trying to copy a part of a multi-disk file\n"
+			if(IDYES!=MessageBoxA(TC_HWND, "You are trying to copy a part of a multi-disk file\n"
 				"to a subdirectory. Ensoniq samplers will only read\n"
 				"this file if it is located in the root directory.\n\n"
 				"Continue anyway?", "EnsoniqFS · Warning", MB_ICONWARNING|MB_YESNO))
@@ -2345,7 +2345,7 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 	if(-1==iEntry)
 	{
 		LOG("Error. Directory is full.\n");
-		MessageBoxA(0, "Directory is full (39 entries maximum).",
+		MessageBoxA(TC_HWND, "Directory is full (39 entries maximum).",
 					"EnsoniqFS · Warning", MB_ICONWARNING);
 		fclose(f);
 		return FS_FILE_WRITEERROR;
@@ -2849,7 +2849,7 @@ DLLEXPORT BOOL __stdcall FsMkDir(char* Path)
 	{
 		LOG("Error: Directory is full.\n");
 		sprintf(cText, "Directory is full (39 entries maximum).");
-		MessageBoxA(0, cText, "EnsoniqFS · Warning", MB_ICONWARNING);
+		MessageBoxA(TC_HWND, cText, "EnsoniqFS · Warning", MB_ICONWARNING);
 		return FALSE;
 	}
 
@@ -2879,7 +2879,7 @@ DLLEXPORT BOOL __stdcall FsMkDir(char* Path)
 	if(0==iNextFreeBlocks)
 	{
 		sprintf(cText, "Error: Disk is full.");
-		MessageBoxA(0, cText, "EnsoniqFS · Warning", MB_ICONWARNING);
+		MessageBoxA(TC_HWND, cText, "EnsoniqFS · Warning", MB_ICONWARNING);
 		return FALSE;
 	}
 
@@ -3178,7 +3178,7 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 	if(-1==iNewEntry)
 	{
 		LOG("Error. Directory is full.\n");
-		MessageBoxA(0, "Directory is full (39 entries maximum).",
+		MessageBoxA(TC_HWND, "Directory is full (39 entries maximum).",
 					"EnsoniqFS · Warning", MB_ICONWARNING);
 		return FS_FILE_WRITEERROR;
 	}
