@@ -51,6 +51,8 @@
 #include "cache.h"
 #include "optionsdlg.h"
 #include "choosediskdlg.h"
+#include "resource.h"
+#include "string.h"
 
 //----------------------------------------------------------------------------
 // globals
@@ -108,6 +110,19 @@ void upcase(char *c)
 	for(i=j; i<(int)strlen(c); i++) c[i] = toupper(c[i]);
 }
 
+//----------------------------------------------------------------------------
+// FixDirectoryEntries
+//
+// Calculates the length of all files in a given directory from the FAT
+// entries and updates the corresponding directory entries.
+//
+// This fixes wrong file sizes.
+//
+// -> pDisk = pointer to disk
+//    pDir = pointer to directory
+// <- ERR_OK
+//    ERR_WRITE
+//----------------------------------------------------------------------------
 int FixDirectoryEntries(DISK *pDisk, ENSONIQDIR *pDir)
 {
 	int i, iResult;
@@ -278,12 +293,12 @@ int ReadDirectory(DISK *pDisk, ENSONIQDIR *pDir, unsigned char ucShowWarning)
 	if(ucWarningFlag&&ucShowWarning)
 	{
 		strcat(cWarningMsg, "\n\nShould this problem be corrected?");
-   		if(IDYES == MessageBoxA(TC_HWND, cWarningMsg, "EnsoniqFS · Warning", 
+   		if(IDYES == MessageBoxA(TC_HWND, cWarningMsg, "EnsoniqFS · Warning",
 		   MB_ICONWARNING | MB_YESNO))
 		{
 			if(ERR_OK!=FixDirectoryEntries(pDisk, pDir))
 			{
-		   		MessageBoxA(TC_HWND, "Could not write directory.", "EnsoniqFS · Error", 
+		   		MessageBoxA(TC_HWND, "Could not write directory.", "EnsoniqFS · Error",
 				   MB_ICONSTOP);
 			}
 		}
@@ -608,7 +623,7 @@ int SelectNextDisk(DISK **pDisk, DWORD *dwBlock, ENSONIQDIRENTRY *pDirEntry)
 			free(cMsDosName);
 			if(IDCANCEL==MessageBoxA(TC_HWND, 
 				"There was an error during device scan. "
-				"Try again?", "EnsoniqFS · Warning", 
+				"Try again?", "EnsoniqFS · Warning",
 				MB_ICONWARNING | MB_RETRYCANCEL))
 			{
 				return ERR_ABORTED;
@@ -623,7 +638,7 @@ int SelectNextDisk(DISK **pDisk, DWORD *dwBlock, ENSONIQDIRENTRY *pDirEntry)
 		{
 			if(IDCANCEL==MessageBoxA(TC_HWND, 
 				"The selected disk could not be found. "
-				"Try again?", "EnsoniqFS · Warning", 
+				"Try again?", "EnsoniqFS · Warning",
 				MB_ICONWARNING | MB_RETRYCANCEL))
 			{
 				return ERR_ABORTED;
@@ -638,7 +653,7 @@ int SelectNextDisk(DISK **pDisk, DWORD *dwBlock, ENSONIQDIRENTRY *pDirEntry)
 		{
 			if(IDCANCEL==MessageBoxA(TC_HWND, 
 				"Could not read the selected disk. "
-				"Retry?", "EnsoniqFS · Warning", 
+				"Retry?", "EnsoniqFS · Warning",
 				MB_ICONWARNING | MB_RETRYCANCEL))
 			{
 				return ERR_ABORTED;
@@ -670,7 +685,7 @@ int SelectNextDisk(DISK **pDisk, DWORD *dwBlock, ENSONIQDIRENTRY *pDirEntry)
 		{
 			if(IDCANCEL==MessageBoxA(TC_HWND, 
 				"Could not find the multi disk file on the selected disk. "
-				"Retry?", "EnsoniqFS · Warning", 
+				"Retry?", "EnsoniqFS · Warning",
 				MB_ICONWARNING | MB_RETRYCANCEL))
 			{
 				return ERR_ABORTED;
@@ -686,7 +701,7 @@ int SelectNextDisk(DISK **pDisk, DWORD *dwBlock, ENSONIQDIRENTRY *pDirEntry)
 				"is part %d instead of %d. Retry?", 
 				pe->ucMultiFileIndex, pDirEntry->ucMultiFileIndex+1);
 			if(IDCANCEL==MessageBoxA(TC_HWND, 
-				cMessage, "EnsoniqFS · Warning", 
+				cMessage, "EnsoniqFS · Warning",
 				MB_ICONWARNING | MB_RETRYCANCEL))
 			{
 				return ERR_ABORTED;
@@ -755,7 +770,7 @@ int ReadEnsoniqFile(DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, char *cDestFN,
 			   " (b) all necessary fixed disks or image files mounted.\n\n"
 			   "Do you want to merge all files (Yes), copy only this single\n"
 			   "file (No) or cancel the process?", 
-			   "EnsoniqFS · Warning", 
+			   "EnsoniqFS · Warning",
 			   MB_ICONWARNING | MB_YESNOCANCEL);
 			if(i==IDCANCEL) 
 			{
@@ -773,7 +788,7 @@ int ReadEnsoniqFile(DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, char *cDestFN,
 			   "multi-disk file. To join all parts\n"
 			   "to one file you have to start with the first part.\n\n"
 			   "Do you want to copy this part only?", 
-			   "EnsoniqFS · Warning", 
+			   "EnsoniqFS · Warning",
 			   MB_ICONWARNING | MB_YESNO))
 			{
 				return ERR_ABORTED;
@@ -1328,23 +1343,176 @@ DLLEXPORT HANDLE __stdcall FsFindFirst(char* cPath, WIN32_FIND_DATA *FindData)
 		FsFindNext(pHandle, FindData);
 		return pHandle;
 	}
-	
+
 	return INVALID_HANDLE_VALUE;
 }
 
-/*
 //----------------------------------------------------------------------------
 // FsExtractCustomIcon
 //
 //----------------------------------------------------------------------------
 DLLEXPORT int __stdcall FsExtractCustomIcon(char* RemoteName,
-											int ExtractFlags,
-											HICON* TheIcon)
+	int ExtractFlags, HICON* TheIcon)
 {
-	return FS_ICON_USEDEFAULT;
-}
+	LOG("FsExtractCustomIcon(%s, %d)\n", RemoteName, ExtractFlags);
+
+/*
+Icon    Type     Name
+x	 * 00 (00) = Unused (or Blank)
+x	 * 01 (01) = Eps Operating System
+x	 * 02 (02) = Sub-Directory
+x	 * 03 (03) = EPS Individual Instrument File
+x	 * 04 (04) = EPS Bank of Sounds
+x	 * 05 (05) = EPS Sequence File
+x	 * 06 (06) = EPS Song File
+	 * 07 (07) = EPS System Exclusive File
+	 * 08 (08) = Pointer to Parent Directory
+x	 * 09 (09) = EPS Macro File
+	 * 10 (0A) = SD-1 or VFX-SD 1 Program File
+	 * 11 (0B) = SD-1 or VFX-SD 6 Program File
+	 * 12 (0C) = SD-1 or VFX-SD 30 Program File
+	 * 13 (0D) = SD-1 or VFX-SD 60 Program File
+	 * 14 (0E) = SD-1 or VFX-SD 1 Preset File
+	 * 15 (0F) = SD-1 or VFX-SD 10 Presets File
+	 * 16 (10) = SD-1 or VFX-SD 20 Presets File
+	 * 17 (11) = SD-1 or VFX-SD 1 Sequence/Song File
+	 * 18 (12) = SD-1 or VFX-SD 30 Sequence/Songs File
+	 * 19 (13) = SD-1 or VFX-SD 60 Sequence/Songs File
+	 * 20 (14) = SD-1 or VFX-SD System Exclusive File
+	 * 21 (15) = SD-1 or VFX-SD System Setup File
+	 * 22 (16) = SD-1 or VFX-SD Sequencer Operating System
+x	 * 23 (17) = EPS-16 Plus Bank File
+x	 * 24 (18) = EPS-16 Plus Effect File
+x	 * 25 (19) = EPS-16 Plus Sequence File
+x	 * 26 (1A) = EPS-16 Plus Song File
+x	 * 27 (1B) = EPS-16 Plus Operating System
+x	 * 28 (1C) = ASR-10 Sequence File
+x	 * 29 (1D) = ASR-10 Song File
+x	 * 30 (1E) = ASR-10 Bank File
+x	 * 31 (1F) = ASR-10 Audio Track
+x	 * 32 (20) = ASR-10 Operating System
+x	 * 33 (21) = ASR-10 Effect File
+x	 * 34 (22) = ASR-10 Macro File
+ 	 * 35 pg6
+	 * 36 pg60
+	 * 37 p120
+	 * 38 ps1
+	 * 39 ps60
+	 * 40 SetUp
+	 * 41 seq1
+	 * 42 so30
+	 * 43 demo
+	 * 44 eu44
+	 * 45 cnfg
+	 * 46 smpbnk
+	 * 47 EDIT
 */
 
+	// set default icon to "unknown"
+	int iIcon = IDI_ICON_UNKNOWN;
+
+	// Is the current item a folder (ends with '\')?
+	if(RemoteName[strlen(RemoteName)-1]=='\\')
+	{
+		iIcon = IDI_ICON_FOLDER;
+		LOG("Folder\n");
+	}
+	// If the item is at root level and is not a folder, then it must be
+	// a command item
+	else if(GetDirectoryLevel(RemoteName)==1)
+	{
+		iIcon = IDI_ICON_CMD;
+	}
+	// blocks free information?
+	else if(strstr(RemoteName, " blocks free ("))
+	{
+		iIcon = IDI_ICON_INFO;
+	}
+	// wave file? (it is sufficient to check for lower case ".wav" here
+	// because this will not occur in any file name or path, they are all
+	// upper case)
+	else if(strstr(RemoteName, ".wav"))
+	{
+		iIcon = IDI_ICON_WAV;
+	}
+	else
+	{
+		// find the file type marker inside the name "[xx]
+		char *p1 = strstr(RemoteName, ".[");
+		char *p2 = strstr(RemoteName, "].");
+
+		if(p1 && p2 && ((p2 - p1) == 4))
+		{
+			// isolate file type substring
+			char strType[3];
+			strncpy(strType, p1+2, 2);
+			strType[2] = 0;
+
+			// look up icon
+			switch(atoi(strType))
+			{
+			case 1:
+				iIcon = IDI_ICON_EPS_OS; break;
+			case 3:
+				iIcon = IDI_ICON_EPS_INST; break;
+			case 4:
+				iIcon = IDI_ICON_EPS_BANK; break;
+			case 5:
+				iIcon = IDI_ICON_EPS_SEQ; break;
+			case 6:
+				iIcon = IDI_ICON_EPS_SONG; break;
+			case 9:
+				iIcon = IDI_ICON_EPS_MACRO; break;
+			case 23:
+				iIcon = IDI_ICON_16PLUS_BANK; break;
+			case 24:
+				iIcon = IDI_ICON_16PLUS_FX; break;
+			case 25:
+				iIcon = IDI_ICON_16PLUS_SEQ; break;
+			case 26:
+				iIcon = IDI_ICON_16PLUS_SONG; break;
+			case 27:
+				iIcon = IDI_ICON_16PLUS_OS; break;
+			case 28:
+				iIcon = IDI_ICON_ASR_SEQ; break;
+			case 29:
+				iIcon = IDI_ICON_ASR_SONG; break;
+			case 30:
+				iIcon = IDI_ICON_ASR_BANK; break;
+			case 31:
+				iIcon = IDI_ICON_ASR_ATRACK; break;
+			case 32:
+				iIcon = IDI_ICON_ASR_OS; break;
+			case 33:
+				iIcon = IDI_ICON_ASR_FX; break;
+			case 34:
+				iIcon = IDI_ICON_ASR_MACRO; break;
+			default:
+				iIcon = IDI_ICON_UNKNOWN; break;
+			}
+		}
+	}
+
+	// Small icon 16x16?
+	if(ExtractFlags&FS_ICONFLAG_SMALL)
+	{
+		*TheIcon = (HICON) LoadImage(g_hInst,
+			MAKEINTRESOURCE(iIcon), IMAGE_ICON, 16, 16, 0);
+	}
+	else
+	// Big icon 32x32
+	{
+		*TheIcon = (HICON) LoadImage(g_hInst,
+			MAKEINTRESOURCE(iIcon),  IMAGE_ICON, 32, 32, 0);
+	}
+
+	if(0==TheIcon)
+	{
+		LOG("Warning: Failed to load icon.\n");
+	}
+
+	return FS_ICON_EXTRACTED;
+}
 
 //----------------------------------------------------------------------------
 // FsExecuteFile
@@ -1673,7 +1841,7 @@ DLLEXPORT BOOL __stdcall FsFindNext(HANDLE Handle, WIN32_FIND_DATA *FindData)
 		return TRUE;
 	}
 	
-	// deliver virtual "xxx blocks free" file
+	// deliver virtual "x blocks free" file
 	else if(79==pHandle->iNextDirIndex)
 	{
 		// only report free space in ROOT directory of each device
@@ -2036,7 +2204,7 @@ void AddToImageList(char *cName)
 		dwError = GetLastError();
 		LOG("failed: "); LOG_ERR(dwError);
 		
-		MessageBoxA(TC_HWND, "Could not open file.", "EnsoniqFS · Error", 
+		MessageBoxA(TC_HWND, "Could not open file.", "EnsoniqFS · Error",
 			MB_OK | MB_ICONSTOP);
 		return;
 	}
@@ -2424,7 +2592,7 @@ DLLEXPORT int __stdcall FsGetFile(char* RemoteName, char* LocalName,
 	LOG("FsGetFile(remote='%s', local='%s', flags=%d)\n", RemoteName, LocalName,
 		CopyFlags);
 	
-	// does file exist?
+	// does local file exist?
 	if(0==_access(LocalName, 0))
 	{
 		// ask the user to overwrite
@@ -2480,12 +2648,16 @@ DLLEXPORT int __stdcall FsGetFile(char* RemoteName, char* LocalName,
 		}
 	}
 	
+	// scan again, try to match the requested file to an existing virtual
+	// wave file
 	if(-1==iEntry)
 	{
 		for(i=0; i<58; i++)
 		{
+			// check for stereo file
 			if(Handle.EnsoniqDir.VirtualWaveEntry[i].ucIsStereo)
 			{
+				// create wave file name
 				sprintf(cLegalName, "%s_STEREO.WAV",
 					Handle.EnsoniqDir.VirtualWaveEntry[i].cLegalName);
 				
@@ -2495,8 +2667,10 @@ DLLEXPORT int __stdcall FsGetFile(char* RemoteName, char* LocalName,
 					iEntry = i; ucIsVirtualWaveFile = 1; break;
 				}
 			}
+			// check for mono file
 			else
 			{
+				// create wave file name
 				sprintf(cLegalName, "%s.WAV",
 					Handle.EnsoniqDir.VirtualWaveEntry[i].cLegalName);
 				
@@ -2509,13 +2683,14 @@ DLLEXPORT int __stdcall FsGetFile(char* RemoteName, char* LocalName,
 		}
 	}
 	
+	// requested Ensoniq file does not exist
 	if(-1==iEntry) 
 	{
 		LOG("Error: file not found.\n");
 		return FS_FILE_NOTFOUND;
 	}
 	
-	// read file to local disk
+	// read file to local disk, either as Ensoniq file or as Wave file
 	if(!ucIsVirtualWaveFile)
 	{
 		iResult = ReadEnsoniqFile(Handle.pDisk, 
@@ -2555,6 +2730,7 @@ DLLEXPORT int __stdcall FsGetFile(char* RemoteName, char* LocalName,
 	
 	return FS_FILE_OK;
 	
+	// suppress "unused parameter" warning
 	ri=ri;
 }
 

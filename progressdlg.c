@@ -56,18 +56,19 @@ extern HINSTANCE g_hInst;
 // -> dummy = unused pointer
 // <- --
 //----------------------------------------------------------------------------
-void ProgressDialogThread(void *dummy)
+void ProgressDialogThread(void *arg)
 {
 	HWND hWnd;
-	MSG msg; 
+	MSG msg;
+	int *pFlag = (int*)arg;
 
-	// this is to suppress warning: Unused parameter
-	dummy=dummy;
-	
-	LOG("ProgressDialogThread() started. ");
+	LOG("\nProgressDialogThread() started. ");
 	
     // create the dialog window
-	m_hProgressWnd = CreateDialog(g_hInst, MAKEINTRESOURCE(IDD_DLG_PROGRESS), TC_HWND, 0);
+	LOG("Creating progress window: ");
+//	m_hProgressWnd = CreateDialog(g_hInst, MAKEINTRESOURCE(IDD_DLG_PROGRESS), TC_HWND, 0);
+	m_hProgressWnd = CreateDialog(g_hInst, MAKEINTRESOURCE(IDD_DLG_PROGRESS), 0, 0);
+	LOG("OK\n");
 	hWnd = m_hProgressWnd;
 	if(hWnd!=NULL)
 	{
@@ -80,6 +81,7 @@ void ProgressDialogThread(void *dummy)
 	{
 		LOG("CreateDialog() failed.\n");
 		m_bProgressDone = TRUE;
+		*pFlag = 1;
 		return;
 	}
 	
@@ -88,6 +90,8 @@ void ProgressDialogThread(void *dummy)
 	// message loop
 	while(1)
 	{
+		*pFlag = 1;
+
 		// get next message
 		if(GetMessage(&msg, hWnd, 0, 0))
 		{
@@ -185,6 +189,8 @@ void UpdateProgressDialog(char *cText, int iProgress)
 //----------------------------------------------------------------------------
 int CreateProgressDialog()
 {
+	int iFlag = 0;
+
 	LOG("CreateProgressDialog(): ");
 	
 	// check handle
@@ -195,14 +201,15 @@ int CreateProgressDialog()
 	}
 	
 	// create thread
-	if(-1==(int)_beginthread(ProgressDialogThread, 0, NULL))
+	if(-1==(int)_beginthread(ProgressDialogThread, 0, (void*)&iFlag))
 	{
 		LOG("Failed to create progress dialog thread.\n");
 		return ERR_CREATE_DLG;
 	}
 	
-	LOG("OK.\n");
-	Sleep(150);
+	LOG("OK.\nWaiting for thread to enter message loop... ");
+	while(!iFlag) Sleep(100);
+	LOG("Progress dialog ready.\n");
 	return ERR_OK;
 }
 
