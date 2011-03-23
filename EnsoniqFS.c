@@ -1354,7 +1354,7 @@ DLLEXPORT HANDLE __stdcall FsFindFirst(char* cPath, WIN32_FIND_DATA *FindData)
 DLLEXPORT int __stdcall FsExtractCustomIcon(char* RemoteName,
 	int ExtractFlags, HICON* TheIcon)
 {
-	LOG("FsExtractCustomIcon(%s, %d)\n", RemoteName, ExtractFlags);
+//	LOG("FsExtractCustomIcon(%s, %d)\n", RemoteName, ExtractFlags);
 
 /*
 Icon    Type     Name
@@ -1415,7 +1415,6 @@ x	 * 34 (22) = ASR-10 Macro File
 	if(RemoteName[strlen(RemoteName)-1]=='\\')
 	{
 		iIcon = IDI_ICON_FOLDER;
-		LOG("Folder\n");
 	}
 	// If the item is at root level and is not a folder, then it must be
 	// a command item
