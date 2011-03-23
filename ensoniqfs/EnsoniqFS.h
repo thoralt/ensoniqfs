@@ -124,11 +124,7 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 DLLEXPORT int __stdcall FsExecuteFile(HWND MainWin, char* RemoteName,
 	char* Verb);
 	
-/* not used at the moment
 DLLEXPORT int __stdcall FsExtractCustomIcon(char* RemoteName,
 											int ExtractFlags,
 											HICON* TheIcon);
-
-*/
-
 #endif

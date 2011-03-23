@@ -3,6 +3,29 @@
 #endif
 
 #define IDD_DIALOG_DISK                         102
+#define IDI_ICON_16PLUS_BANK                    109
+#define IDI_ICON_16PLUS_OS                      110
+#define IDI_ICON_ASR_BANK                       111
+#define IDI_ICON_ASR_OS                         112
+#define IDI_ICON_EPS_INST                       113
+#define IDI_ICON_EPS_OS                         114
+#define IDI_ICON_FOLDER                         116
+#define IDI_ICON_INFO                           118
+#define IDI_ICON_UNKNOWN                        120
+#define IDI_ICON_EPS_BANK                       122
+#define IDI_ICON_16PLUS_SEQ                     129
+#define IDI_ICON_16PLUS_SONG                    131
+#define IDI_ICON_ASR_SEQ                        132
+#define IDI_ICON_ASR_SONG                       133
+#define IDI_ICON_EPS_SEQ                        134
+#define IDI_ICON_EPS_SONG                       135
+#define IDI_ICON_16PLUS_FX                      141
+#define IDI_ICON_ASR_FX                         142
+#define IDI_ICON_EPS_MACRO                      143
+#define IDI_ICON_ASR_MACRO                      144
+#define IDI_ICON_ASR_ATRACK                     146
+#define IDI_ICON_WAV                            148
+#define IDI_ICON_CMD                            150
 #define IDD_DLG_PROGRESS                        1000
 #define IDC_STATIC_STATUS                       1001
 #define IDC_GRP1                                1002
