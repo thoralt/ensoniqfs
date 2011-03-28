@@ -3253,20 +3253,20 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 	for(i=strlen(OldName); i>0; i--) if('\\'==OldName[i]) break;
 	strncpy(OldHandle.cPath, OldName, i);
 	strcpy(cOldName, OldName+i+1);
-	strcpy(cEOldName, cOldName);
-	cEOldName[strlen(cEOldName)-9] = 0; // cut off ".[xx].EFE"
-	cEOldName[13] = 0; // limit the size to 12 chars
-	while(strlen(cEOldName)<12) strcat(cEOldName, " "); // fill up with spaces
+	//strcpy(cEOldName, cOldName);
+	//cEOldName[strlen(cEOldName)-9] = 0; // cut off ".[xx].EFE"
+	//cEOldName[13] = 0; // limit the size to 12 chars
+	//while(strlen(cEOldName)<12) strcat(cEOldName, " "); // fill up with spaces
 
 	// new dir
 	memset(&NewHandle, 0, sizeof(FIND_HANDLE));
 	for(i=strlen(NewName); i>0; i--) if('\\'==NewName[i]) break;
 	strncpy(NewHandle.cPath, NewName, i);
 	strcpy(cNewName, NewName+i+1);
-	strcpy(cENewName, cNewName);
-	cENewName[strlen(cNewName)-9] = 0; // cut off ".[xx].EFE"
-	cENewName[13] = 0; // limit the size to 12 chars
-	while(strlen(cENewName)<12) strcat(cENewName, " "); // fill up with spaces
+	//strcpy(cENewName, cNewName);
+	//cENewName[strlen(cNewName)-9] = 0; // cut off ".[xx].EFE"
+	//cENewName[13] = 0; // limit the size to 12 chars
+	//while(strlen(cENewName)<12) strcat(cENewName, " "); // fill up with spaces
 	
 	// read directory structure of OldHandle
 	if(ERR_OK!=ReadDirectoryFromPath(&OldHandle, 0))
@@ -3299,6 +3299,7 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 			ucMultiFileIndex = OldHandle.EnsoniqDir.Entry[i].ucMultiFileIndex;
 			ucType = OldHandle.EnsoniqDir.Entry[i].ucType;
 			dwFilesize = OldHandle.EnsoniqDir.Entry[i].dwLen;
+			strcpy(cEOldName, OldHandle.EnsoniqDir.Entry[i].cName);
 			break;
 		}	
 	}
@@ -3360,6 +3361,25 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 					"EnsoniqFS · Warning", MB_ICONWARNING);
 		return FS_FILE_WRITEERROR;
 	}
+	
+	// Is old and new name the same? This indicates that the action does not involve
+	// renaming. In this case, we use the original Ensoniq name of the file for the
+	// destination (including special characters e.g. '*')
+	if (0==strcmp(cOldName,cNewName))
+		strcpy(cENewName, cEOldName);
+	else
+		strcpy(cENewName, cNewName);
+	
+	cENewName[13] = 0; // limit the size to 12 chars
+	while(strlen(cENewName)<12) strcat(cENewName, " "); // fill up with spaces
+	
+	
+	// note: cEOldName is unused here
+	strcpy(cEOldName, cOldName);
+	cEOldName[strlen(cEOldName)-9] = 0; // cut off ".[xx].EFE"
+	cEOldName[13] = 0; // limit the size to 12 chars
+	while(strlen(cEOldName)<12) strcat(cEOldName, " "); // fill up with spaces
+	
 
 	// if we come to here, the variables are set to the following values:
 	//   OldHandle = structure with decoded directory content and with
