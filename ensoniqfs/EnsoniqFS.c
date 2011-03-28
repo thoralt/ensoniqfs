@@ -2498,7 +2498,8 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 	// if file doesn't exist try to find the first free entry in directory
 	if(-1==iEntry)
 	{
-		for(i=0; i<39; i++)
+		// skip entry 0
+		for(i=1; i<39; i++)
 		{
 			if(FILE_TYPE_EMPTY==Handle.EnsoniqDir.Entry[i].ucType)
 			{
@@ -3011,8 +3012,9 @@ DLLEXPORT BOOL __stdcall FsMkDir(char* Path)
 	}
 	
 	// check for next free entry
+	// skip entry 0 during search
 	iNextFreeEntryInCurrentDir = -1;
-	for(i=0; i<39; i++)
+	for(i=1; i<39; i++)
 	{
 		if(FILE_TYPE_EMPTY==ucCurrentDir[i*26+1])
 		{
@@ -3341,7 +3343,8 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 	else
 	{
 		// search for free entry
-		for(i=0; i<39; i++)
+		// skip entry 0 during search
+		for(i=1; i<39; i++)
 		{
 			if(FILE_TYPE_EMPTY==NewHandle.EnsoniqDir.Entry[i].ucType)
 			{
