@@ -54,6 +54,8 @@
 #include "resource.h"
 #include "string.h"
 
+#include "bank.h"
+
 //----------------------------------------------------------------------------
 // globals
 //----------------------------------------------------------------------------
@@ -81,6 +83,8 @@ int g_iOptionEnablePhysicalDisks = 1;
 int g_iOptionAutomaticRescan = 1;
 int g_iOptionEnableLogging = 1;
 char g_cOptionInstallPath[261];
+int g_iOptionBankAdaption = 0;
+int g_iOptionBankDevice = 0;
 
 // flag for operations on multiple files to flush the cache only once after
 // the last file
@@ -91,6 +95,8 @@ const char g_cMemoryFN[] = "8EEA3415-4462-4f26-87BE-58ED9B9E5D86-EnsoniqFS";
 #define SHARED_MEMORY_SIZE	4096
 unsigned char *g_ucSharedMemory = NULL;
 HANDLE g_hMemoryMappedFile = INVALID_HANDLE_VALUE;
+
+
 
 //----------------------------------------------------------------------------
 // upcase
@@ -3134,6 +3140,9 @@ DLLEXPORT void __stdcall FsStatusInfo(char* RemoteDir, int InfoStartEnd,
 			case FS_STATUS_OP_RENMOV_MULTI:
 				LOG("FS_STATUS_OP_RENMOV_MULTI start.\n");
 				g_ucMultiple = 1;
+				if (g_iOptionBankAdaption)
+					freePostProcessItems();
+					
 				break;
 			case FS_STATUS_OP_DELETE:
 				LOG("FS_STATUS_OP_DELETE start.\n");
@@ -3174,6 +3183,12 @@ DLLEXPORT void __stdcall FsStatusInfo(char* RemoteDir, int InfoStartEnd,
 				{
 					CacheFlush(pDisk);
 					pDisk = pDisk->pNext;
+				}
+				if (g_iOptionBankAdaption)
+				{
+					doPostProcess();
+					freePostProcessItems();
+					freeIndexListTranslation();
 				}
 				break;
 			default:
@@ -3220,6 +3235,12 @@ DLLEXPORT void __stdcall FsSetDefaultParams(FsDefaultParamStruct* dps)
 	g_iOptionAutomaticRescan = (cValue[0]=='0')?0:1;
 	GetIniValue(cName, "[EnsoniqFS]", "EnableLogging", cValue, 2, "0");
 	g_iOptionEnableLogging = (cValue[0]=='0')?0:1;
+	GetIniValue(cName, "[EnsoniqFS]", "BankAdaption", cValue, 2, "0");
+	g_iOptionBankAdaption = (cValue[0]=='0')?0:1;
+	GetIniValue(cName, "[EnsoniqFS]", "BankDevice", cValue, 2, "0");
+	g_iOptionBankDevice = atoi(cValue);
+	if (g_iOptionBankDevice < 0) g_iOptionBankDevice = 0;
+	if (g_iOptionBankDevice > 8) g_iOptionBankDevice = 8;
 }
 
 //----------------------------------------------------------------------------
@@ -3257,6 +3278,13 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 	//cEOldName[strlen(cEOldName)-9] = 0; // cut off ".[xx].EFE"
 	//cEOldName[13] = 0; // limit the size to 12 chars
 	//while(strlen(cEOldName)<12) strcat(cEOldName, " "); // fill up with spaces
+	
+//	// obsolete, GetIndexListFromPath has been using an extra file handle
+//	// for bank adaption
+//	FIND_HANDLE OldCompleteHandle;
+//    memset(&OldCompleteHandle, 0, sizeof(FIND_HANDLE));
+//	strncpy(OldCompleteHandle.cPath, OldName, i);
+		
 
 	// new dir
 	memset(&NewHandle, 0, sizeof(FIND_HANDLE));
@@ -3267,6 +3295,13 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 	//cENewName[strlen(cNewName)-9] = 0; // cut off ".[xx].EFE"
 	//cENewName[13] = 0; // limit the size to 12 chars
 	//while(strlen(cENewName)<12) strcat(cENewName, " "); // fill up with spaces
+
+//	// obsolete, GetIndexListFromPath has been using an extra file handle
+//	// for bank adaption
+//	FIND_HANDLE NewCompleteHandle;
+//	memset(&NewCompleteHandle, 0, sizeof(FIND_HANDLE));
+//	strncpy(NewCompleteHandle.cPath, NewName, i);
+	
 	
 	// read directory structure of OldHandle
 	if(ERR_OK!=ReadDirectoryFromPath(&OldHandle, 0))
@@ -3403,6 +3438,27 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 	LOG("OldPath='%s', OldName='%s', NewPath='%s', NewName='%s'\n", 
 		OldHandle.cPath, cOldName, NewHandle.cPath, cNewName);
 	
+	if(g_iOptionBankAdaption)
+	{
+		INDEX_LIST_PAIR * pIndexListTranslationItem = createIndexListTranslationItem();
+		
+	    // set index list for old and new entry (old entry might be gone later)
+		if(ERR_OK!=GetIndexListFromPath(&OldHandle, &(pIndexListTranslationItem->SourceIndexList) ))
+		{
+			LOG("Error: Unable to read old directory.\n");
+			return FS_FILE_NOTFOUND;
+		}
+		appendIndex(&(pIndexListTranslationItem->SourceIndexList),iOldEntry);
+		
+		
+		if(ERR_OK!=GetIndexListFromPath(&NewHandle, &(pIndexListTranslationItem->TargetIndexList) ))
+		{
+			LOG("Error: Unable to read new directory.\n");
+			return FS_FILE_NOTFOUND;
+		}
+		appendIndex(&(pIndexListTranslationItem->TargetIndexList),iNewEntry);
+	}
+		
 	if(Move) // move file within EnsoniqFS
 	{
 		
@@ -3526,7 +3582,15 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 			CacheFlush(NewHandle.pDisk);
 		}
 	}
-	
+		
+	if(g_iOptionBankAdaption)
+	{
+		if ( isBankFile( OldHandle.EnsoniqDir.Entry[iOldEntry].ucType ) )
+		{
+			addItemToPostProcess( NewName );
+		}
+	}
+		
 	if(1==g_pProgressProc(g_iPluginNr, OldName, NewName, 100))
 		return ERR_ABORTED;
 	

@@ -39,7 +39,11 @@
 
 #define FILE_TYPE_EMPTY				0x00
 #define FILE_TYPE_DIRECTORY			0x02
+#define FILE_TYPE_EPS_BANK			0x04
 #define FILE_TYPE_PARENT_DIRECTORY	0x08
+#define FILE_TYPE_EPS16_BANK		0x17
+#define FILE_TYPE_ASR_SONG			0x1D
+#define FILE_TYPE_ASR_BANK			0x1E
 #define FILE_TYPE_ASR_AUDIOTRACK	0x1F
 
 //----------------------------------------------------------------------------
@@ -99,6 +103,15 @@ typedef struct _FIND_HANDLE
 // prototypes
 //----------------------------------------------------------------------------
 void AddToImageList(char *cName);
+
+// prototypes for usage in bank.c
+void upcase(char *c);
+int ReadDirectoryFromPath(FIND_HANDLE *pHandle, unsigned char ucShowWarning);
+DISK *GetDiskFromPath(char *cPath);
+int ReadDirectory(DISK *pDisk, ENSONIQDIR *pDir, unsigned char ucShowWarning);
+
+    
+
 
 //----------------------------------------------------------------------------
 // DLL exports

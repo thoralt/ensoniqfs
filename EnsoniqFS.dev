@@ -1,7 +1,7 @@
 [Project]
 FileName=EnsoniqFS.dev
 Name=EnsoniqFS
-UnitCount=26
+UnitCount=28
 Type=3
 Ver=1
 ObjFiles=
@@ -301,4 +301,24 @@ Link=0
 Priority=1000
 OverrideBuildCmd=1
 BuildCmd=<override this command>
+
+[Unit27]
+FileName=bank.c
+CompileCpp=0
+Folder=
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit28]
+FileName=bank.h
+CompileCpp=0
+Folder=
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
 

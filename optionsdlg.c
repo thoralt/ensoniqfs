@@ -60,6 +60,8 @@ extern int g_iOptionEnableImages;
 extern int g_iOptionEnablePhysicalDisks;
 extern int g_iOptionAutomaticRescan;
 extern int g_iOptionEnableLogging;
+extern int g_iOptionBankAdaption;
+extern int g_iOptionBankDevice;
 
 int m_iDeviceListChanged = 0;
 
@@ -111,6 +113,14 @@ void OptionsDlg_OnOK(HWND hWnd)
 	g_iOptionEnableLogging = 
 		(SendMessage(GetDlgItem(hWnd, IDC_CHK_LOGGING),
 		(UINT)BM_GETCHECK, (WPARAM)0, (LPARAM)0)==BST_CHECKED)?1:0;
+	g_iOptionBankAdaption = 
+		(SendMessage(GetDlgItem(hWnd, IDC_CHK_BANKADAPTION),
+		(UINT)BM_GETCHECK, (WPARAM)0, (LPARAM)0)==BST_CHECKED)?1:0;
+
+	LRESULT lResult = SendMessage(GetDlgItem(hWnd, IDC_CBO_BANKDEVICE),
+		(UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
+	int bankDeviceIndex = lResult;
+	g_iOptionBankDevice = (bankDeviceIndex < 4) ? bankDeviceIndex : bankDeviceIndex + 1;
 
 	SetIniValueInt(cName, "[EnsoniqFS]", "EnableFloppy", 
 		g_iOptionEnableFloppy);
@@ -129,6 +139,12 @@ void OptionsDlg_OnOK(HWND hWnd)
 
 	SetIniValueInt(cName, "[EnsoniqFS]", "EnableLogging", 
 		g_iOptionEnableLogging);
+
+	SetIniValueInt(cName, "[EnsoniqFS]", "BankAdaption", 
+		g_iOptionBankAdaption);
+
+	SetIniValueInt(cName, "[EnsoniqFS]", "BankDevice", 
+		g_iOptionBankDevice);
 
 	if(m_iDeviceListChanged)
 	{
@@ -401,6 +417,36 @@ void OptionsDlg_OnInitDialog(HWND hWnd)
 		(UINT)BM_SETCHECK, 
 		(WPARAM)(g_iOptionEnableLogging?BST_CHECKED:BST_UNCHECKED), 
 		(LPARAM)0);
+	SendMessage(GetDlgItem(hWnd, IDC_CHK_BANKADAPTION),
+		(UINT)BM_SETCHECK, 
+		(WPARAM)(g_iOptionBankAdaption?BST_CHECKED:BST_UNCHECKED), 
+		(LPARAM)0);
+	
+	// clear and init "BankDevice" ComboBox
+	// skip "SCSI 3", this is the Ensoniq itself
+	SendMessage(GetDlgItem(hWnd, IDC_CBO_BANKDEVICE), 
+		(UINT)CB_RESETCONTENT, (WPARAM)0, (LPARAM)0);
+	SendMessage(GetDlgItem(hWnd, IDC_CBO_BANKDEVICE), 
+		(UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)"Floppy");
+	SendMessage(GetDlgItem(hWnd, IDC_CBO_BANKDEVICE), 
+		(UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)"SCSI 0");
+	SendMessage(GetDlgItem(hWnd, IDC_CBO_BANKDEVICE), 
+		(UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)"SCSI 1");
+	SendMessage(GetDlgItem(hWnd, IDC_CBO_BANKDEVICE), 
+		(UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)"SCSI 2");
+	SendMessage(GetDlgItem(hWnd, IDC_CBO_BANKDEVICE), 
+		(UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)"SCSI 4");
+	SendMessage(GetDlgItem(hWnd, IDC_CBO_BANKDEVICE), 
+		(UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)"SCSI 5");
+	SendMessage(GetDlgItem(hWnd, IDC_CBO_BANKDEVICE), 
+		(UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)"SCSI 6");
+	SendMessage(GetDlgItem(hWnd, IDC_CBO_BANKDEVICE), 
+		(UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)"SCSI 7");
+	
+	int bankDeviceListIndex = g_iOptionBankDevice < 4 ? g_iOptionBankDevice : (g_iOptionBankDevice-1);
+	SendMessage(GetDlgItem(hWnd, IDC_CBO_BANKDEVICE), 
+		(UINT)CB_SETCURSEL, (WPARAM)bankDeviceListIndex, (LPARAM)0);
+
 }
 
 //----------------------------------------------------------------------------
