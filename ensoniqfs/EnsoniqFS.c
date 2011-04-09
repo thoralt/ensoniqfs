@@ -84,7 +84,8 @@ int g_iOptionAutomaticRescan = 1;
 int g_iOptionEnableLogging = 1;
 char g_cOptionInstallPath[261];
 int g_iOptionBankAdaption = 0;
-int g_iOptionBankDevice = 0;
+int g_iOptionBankSourceDevice = -1;
+int g_iOptionBankTargetDevice = 0;
 
 // flag for operations on multiple files to flush the cache only once after
 // the last file
@@ -3237,10 +3238,16 @@ DLLEXPORT void __stdcall FsSetDefaultParams(FsDefaultParamStruct* dps)
 	g_iOptionEnableLogging = (cValue[0]=='0')?0:1;
 	GetIniValue(cName, "[EnsoniqFS]", "BankAdaption", cValue, 2, "0");
 	g_iOptionBankAdaption = (cValue[0]=='0')?0:1;
-	GetIniValue(cName, "[EnsoniqFS]", "BankDevice", cValue, 2, "0");
-	g_iOptionBankDevice = atoi(cValue);
-	if (g_iOptionBankDevice < 0) g_iOptionBankDevice = 0;
-	if (g_iOptionBankDevice > 8) g_iOptionBankDevice = 8;
+	
+	GetIniValue(cName, "[EnsoniqFS]", "BankSourceDevice", cValue, 2, "-1");
+	g_iOptionBankSourceDevice = atoi(cValue);
+	if (g_iOptionBankSourceDevice < -1) g_iOptionBankSourceDevice = -1;
+	if (g_iOptionBankSourceDevice > 8) g_iOptionBankSourceDevice = 8;
+	
+	GetIniValue(cName, "[EnsoniqFS]", "BankTargetDevice", cValue, 2, "0");
+	g_iOptionBankTargetDevice = atoi(cValue);
+	if (g_iOptionBankTargetDevice < 0) g_iOptionBankTargetDevice = 0;
+	if (g_iOptionBankTargetDevice > 8) g_iOptionBankTargetDevice = 8;
 }
 
 //----------------------------------------------------------------------------

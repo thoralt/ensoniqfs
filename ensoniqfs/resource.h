@@ -49,5 +49,7 @@
 #define IDC_CHK_LOGGING                         1113
 #define IDC_BTN_DISK_OK                         1115
 #define IDC_CHK_BANKADAPTION                    1116
-#define IDC_CBO_BANKDEVICE                      1117
-#define IDC_LBL_BANKDEVICE                      1118
+#define IDC_CBO_BANKTARGETDEVICE                1117
+#define IDC_LBL_BANKTARGETDEVICE                1118
+#define IDC_LBL_BANKSOURCEDEVICE                1119
+#define IDC_CBO_BANKSOURCEDEVICE                1120
