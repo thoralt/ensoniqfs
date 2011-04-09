@@ -22,7 +22,8 @@
 
 
 // parameters for bank adaption
-extern int g_iOptionBankDevice;
+extern int g_iOptionBankTargetDevice;
+extern int g_iOptionBankSourceDevice;
 
 
 POST_PROCESS_ITEM *g_pPostProcessItemRoot = NULL;
@@ -608,6 +609,26 @@ void adaptBank( unsigned char* pBankData, unsigned char* targetDiskLabel )
 			LOG("adaptBank: processing song entry\n");
 		
 		// now we have a valid track of the bank which is not a copy
+
+		unsigned char deviceId;
+		iResult = getDeviceId( pBankData, trackId, &deviceId );
+		if (ERR_OK != iResult)
+			continue;
+		
+#ifdef LOG_BANK_ADAPT
+		LOG("adaptBank: device id: '%d'\n", deviceId);
+#endif	
+	
+		if ( ( g_iOptionBankSourceDevice != -1 ) && 
+		   ( g_iOptionBankSourceDevice != deviceId ) )
+		{
+#ifdef LOG_BANK_ADAPT
+			LOG("adaptBank: skipping entry due to filtering on source device id: '%d'\n", g_iOptionBankTargetDevice);
+#endif		
+		   continue;
+		}
+		   
+
 		unsigned char diskLabel[8];
 		memset( &diskLabel, 0, sizeof(diskLabel) );
 		iResult = getDiskLabel( pBankData, trackId, diskLabel );
@@ -618,14 +639,6 @@ void adaptBank( unsigned char* pBankData, unsigned char* targetDiskLabel )
 		LOG("adaptBank: disk label: '%s'\n", diskLabel);
 #endif		
 		
-		unsigned char deviceId;
-		iResult = getDeviceId( pBankData, trackId, &deviceId );
-		if (ERR_OK != iResult)
-			continue;
-		
-#ifdef LOG_BANK_ADAPT
-		LOG("adaptBank: device id: '%d'\n", deviceId);
-#endif		
 		
 		ITEM_INDEX_LIST sourceIndexList;
 		iResult = getIndexList( pBankData, trackId, &sourceIndexList );
@@ -711,7 +724,7 @@ void adaptBank( unsigned char* pBankData, unsigned char* targetDiskLabel )
 				
 		
 		// set device id:
-		iResult = setDeviceId( pBankData, trackId, g_iOptionBankDevice );
+		iResult = setDeviceId( pBankData, trackId, g_iOptionBankTargetDevice );
 		if (ERR_OK != iResult)
 		{
 			LOG("adaptBank: error: setting device id not successful!\n");

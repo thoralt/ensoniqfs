@@ -29,28 +29,30 @@ FONT 8, "Ms Shell Dlg"
 
 
 LANGUAGE 0, SUBLANG_NEUTRAL
-IDD_DLG_OPTIONS DIALOGEX 6, 6, 226, 245
+IDD_DLG_OPTIONS DIALOGEX 6, 6, 244, 269
 STYLE DS_CENTER | DS_SETFONT | WS_CAPTION | WS_VISIBLE | WS_SYSMENU
 CAPTION "EnsoniqFS · Options"
 FONT 8, "MS Sans Serif", 0, 0, 1
 {
-    PUSHBUTTON      "&OK", IDC_BTN_OK, 126, 228, 40, 12
-    PUSHBUTTON      "&Cancel", IDC_BTN_CANCEL, 173, 228, 40, 12
+    PUSHBUTTON      "&OK", IDC_BTN_OK, 126, 245, 40, 12
+    PUSHBUTTON      "&Cancel", IDC_BTN_CANCEL, 173, 245, 40, 12
     AUTOCHECKBOX    "Enable floppy disk access", IDC_CHK_FLOPPY, 13, 18, 140, 12
     AUTOCHECKBOX    "Enable CDROM access", IDC_CHK_CDROM, 13, 30, 134, 12
     AUTOCHECKBOX    "Enable removable/fixed disk access", IDC_CHK_PHYSICAL, 13, 43, 140, 12
     AUTOCHECKBOX    "Enable image file support", IDC_CHK_IMAGE, 13, 55, 140, 12
     AUTOCHECKBOX    "Re-scan device list everytime the \\\\\\Ensoniq filesystems folder is entered", IDC_CHK_RESCAN, 13, 73, 187, 19, BS_MULTILINE
-    COMBOBOX        IDC_CBO_FILES, 13, 184, 195, 12, WS_TABSTOP | WS_TABSTOP | CBS_DROPDOWNLIST | CBS_HASSTRINGS
-    PUSHBUTTON      "&Unmount selected image", IDC_BTN_UNMOUNT, 13, 201, 100, 12
-    PUSHBUTTON      "&Mount new image...", IDC_BTN_MOUNT, 113, 201, 95, 12
-    GROUPBOX        "Image files", IDC_GRP3, 6, 170, 207, 49
-    GROUPBOX        "Options", IDC_GRP4, 6, 6, 207, 111
+    COMBOBOX        IDC_CBO_FILES, 13, 200, 218, 12, WS_TABSTOP | WS_TABSTOP | CBS_DROPDOWNLIST | CBS_HASSTRINGS
+    PUSHBUTTON      "&Unmount selected image", IDC_BTN_UNMOUNT, 13, 217, 108, 12
+    PUSHBUTTON      "&Mount new image...", IDC_BTN_MOUNT, 127, 217, 104, 12
+    GROUPBOX        "Image files", IDC_GRP3, 6, 187, 231, 49
+    GROUPBOX        "Options", IDC_GRP4, 6, 6, 231, 111
     AUTOCHECKBOX    "Enable logging to C:\\EnsoniqFS-LOG.txt", IDC_CHK_LOGGING, 13, 98, 194, 12
-    GROUPBOX        "Static", IDC_STATIC, 6, 122, 206, 42
+    GROUPBOX        "Bank file adaption", IDC_STATIC, 6, 122, 231, 60
     AUTOCHECKBOX    "Automatically adapt references in banks", IDC_CHK_BANKADAPTION, 14, 135, 141, 8
-    COMBOBOX        IDC_CBO_BANKDEVICE, 132, 147, 73, 12, CBS_DROPDOWNLIST | CBS_HASSTRINGS
-    LTEXT           "Device for all references", IDC_LBL_BANKDEVICE, 29, 149, 78, 8, SS_LEFT
+    COMBOBOX        IDC_CBO_BANKTARGETDEVICE, 148, 164, 82, 12, CBS_DROPDOWNLIST | CBS_HASSTRINGS
+    LTEXT           "Target device for adapted references", IDC_LBL_BANKTARGETDEVICE, 18, 166, 118, 8, SS_LEFT
+    LTEXT           "Adapt source device references from", IDC_LBL_BANKSOURCEDEVICE, 18, 151, 117, 8, SS_LEFT
+    COMBOBOX        IDC_CBO_BANKSOURCEDEVICE, 148, 149, 82, 12, CBS_DROPDOWNLIST | CBS_HASSTRINGS
 }
 
 
