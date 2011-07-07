@@ -725,6 +725,104 @@ int SelectNextDisk(DISK **pDisk, DWORD *dwBlock, ENSONIQDIRENTRY *pDirEntry)
 	
 	return ERR_OK;
 }
+
+
+int getNameFromEnsoniqFileItem( unsigned char* pData, unsigned char* cDestName )
+{
+ 	if (pData == NULL) return ERR_ABORTED;
+ 	if (cDestName == NULL) return ERR_ABORTED;
+ 	
+ 	// name of instruments starts at 0x000a
+	unsigned int nameOffset = 0x000a;
+	
+	unsigned char charCounter;
+	for( charCounter = 0; charCounter < 12; charCounter++)
+	{
+		cDestName[charCounter] = pData[ nameOffset + charCounter*2 ];
+	}
+	cDestName[12] = 0;
+	return ERR_OK;
+}
+
+
+int setNameToEnsoniqFileItem( unsigned char* pData, const unsigned char* cNewName )
+{
+ 	if (pData == NULL) return ERR_ABORTED;
+ 	if (cNewName == NULL) return ERR_ABORTED;
+
+ 	// name of instruments starts at 0x000a
+	unsigned int nameOffset = 0x000a;
+	
+	unsigned char charCounter;
+	for( charCounter = 0; charCounter < 12; charCounter++)
+	{
+		pData[ nameOffset + charCounter*2 ] = cNewName[charCounter];
+	}
+	
+	return ERR_OK;
+}
+
+
+int RenameEnsoniqItem( DISK *pDisk, ENSONIQDIRENTRY *pDirEntry, const char* cOldName, const char *cNewName )
+{
+	// check pointers
+	if(NULL==pDisk) return ERR_ABORTED;
+	if(NULL==pDirEntry) return ERR_ABORTED;
+	if(NULL==cOldName) return ERR_ABORTED;
+	if(NULL==cNewName) return ERR_ABORTED;
+	
+	unsigned char ucBuf[512];
+	unsigned char ucCurrentName[13];
+	int iResult;
+	DWORD dwBlock;
+	
+	
+	// set starting block
+	dwBlock = pDirEntry->dwStart;
+	
+	// read first block (instrument header)
+	iResult = ReadBlock(pDisk, dwBlock, ucBuf);
+	if(ERR_OK!=iResult)
+	{
+		LOG("SetNameOfEnsoniqFile: Error reading block, code=%d.\n", iResult);
+		return iResult;
+	}
+	
+	// TODO : this works only for instruments
+	iResult = getNameFromEnsoniqFileItem( ucBuf, ucCurrentName );
+	if(ERR_OK!=iResult)
+	{
+		LOG("SetNameOfEnsoniqFile: Error retrieving current name, code=%d.\n", iResult);
+		return iResult;
+	}
+	LOG("Current name: >%s<\n", ucCurrentName);
+	
+	if (0 != strcmp(ucCurrentName, cOldName))
+	{
+		LOG("SetNameOfEnsoniqFile: Mismatch between current name in file system and name in item.\n");
+		return ERR_ABORTED;
+	}
+	
+	// TODO : this works only for instruments
+	iResult = setNameToEnsoniqFileItem( ucBuf, cNewName );
+	if(ERR_OK!=iResult)
+	{
+		LOG("SetNameOfEnsoniqFile: Error setting new name, code=%d.\n", iResult);
+		return iResult;
+	}
+	
+	iResult = WriteBlocks(pDisk, dwBlock, 1, ucBuf);
+	if(ERR_OK!=iResult)
+	{
+		LOG("SetNameOfEnsoniqFile: Error writing Ensoniq file, code=%d.\n", iResult);
+		return ERR_WRITE;
+	}
+	
+	return ERR_OK;
+ 	 
+}
+
+
 //----------------------------------------------------------------------------
 // ReadEnsoniqFile
 // 
@@ -3282,34 +3380,26 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 	for(i=strlen(OldName); i>0; i--) if('\\'==OldName[i]) break;
 	strncpy(OldHandle.cPath, OldName, i);
 	strcpy(cOldName, OldName+i+1);
-	//strcpy(cEOldName, cOldName);
-	//cEOldName[strlen(cEOldName)-9] = 0; // cut off ".[xx].EFE"
-	//cEOldName[13] = 0; // limit the size to 12 chars
-	//while(strlen(cEOldName)<12) strcat(cEOldName, " "); // fill up with spaces
+
+	strcpy(cEOldName, cOldName);
+	cEOldName[strlen(cEOldName)-9] = 0; // cut off ".[xx].EFE"
+	cEOldName[12] = 0; // limit the size to 12 chars
+	while(strlen(cEOldName)<12) strcat(cEOldName, " "); // fill up with spaces
 	
-//	// obsolete, GetIndexListFromPath has been using an extra file handle
-//	// for bank adaption
-//	FIND_HANDLE OldCompleteHandle;
-//    memset(&OldCompleteHandle, 0, sizeof(FIND_HANDLE));
-//	strncpy(OldCompleteHandle.cPath, OldName, i);
-		
 
 	// new dir
 	memset(&NewHandle, 0, sizeof(FIND_HANDLE));
 	for(i=strlen(NewName); i>0; i--) if('\\'==NewName[i]) break;
 	strncpy(NewHandle.cPath, NewName, i);
 	strcpy(cNewName, NewName+i+1);
-	//strcpy(cENewName, cNewName);
-	//cENewName[strlen(cNewName)-9] = 0; // cut off ".[xx].EFE"
-	//cENewName[13] = 0; // limit the size to 12 chars
-	//while(strlen(cENewName)<12) strcat(cENewName, " "); // fill up with spaces
-
-//	// obsolete, GetIndexListFromPath has been using an extra file handle
-//	// for bank adaption
-//	FIND_HANDLE NewCompleteHandle;
-//	memset(&NewCompleteHandle, 0, sizeof(FIND_HANDLE));
-//	strncpy(NewCompleteHandle.cPath, NewName, i);
 	
+	strcpy(cENewName, cNewName);
+	// TODO : we cannot be sure that cNewName ends with ".[xx].EFE"
+	// in the rename dialog, the user could have modified this extension....
+	cENewName[strlen(cNewName)-9] = 0; // cut off ".[xx].EFE"
+	cENewName[12] = 0; // limit the size to 12 chars
+	while(strlen(cENewName)<12) strcat(cENewName, " "); // fill up with spaces
+		
 	
 	// read directory structure of OldHandle
 	if(ERR_OK!=ReadDirectoryFromPath(&OldHandle, 0))
@@ -3350,6 +3440,52 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 	{
 		LOG("Error: Could not find source file.\n");
 		return FS_FILE_NOTFOUND;
+	}
+
+	// the special case: we rename only a file (stays on the same disk in the same directory)
+	if( Move  && (OldHandle.pDisk==NewHandle.pDisk) && (OldHandle.EnsoniqDir.dwDirectoryBlock==NewHandle.EnsoniqDir.dwDirectoryBlock) )
+	{
+	 	// TODO : this works only for instruments
+	 	if ( 0x03 != OldHandle.EnsoniqDir.Entry[iOldEntry].ucType )
+		{	
+			MessageBoxA(TC_HWND, "Renaming is currently only supported for instrument files. Aborting operation.", "EnsoniqFS · Error",
+				MB_ICONSTOP);
+			return ERR_ABORTED;
+		}
+	 	
+		//strcpy(cENewName, cNewName);
+		//cENewName[strlen(cENewName)-9] = 0; // cut off ".[xx].EFE"
+		//cENewName[12] = 0; // limit the size to 12 chars
+		//while(strlen(cENewName)<12) strcat(cENewName, " "); // fill up with spaces
+		
+		// change file name inside file
+		// TODO : this works only for instruments
+		iResult = RenameEnsoniqItem( OldHandle.pDisk, &(OldHandle.EnsoniqDir.Entry[iOldEntry]), cEOldName, cENewName );
+		if ( ERR_OK != iResult )
+		{	
+			return ERR_ABORTED;
+		}
+		
+		// prepare directory entry
+		memcpy(ucOldDir+iOldEntry*26+2, cENewName, 12);
+		
+		// write modified directory
+		if(ERR_OK!=WriteBlocks(OldHandle.pDisk, 
+			OldHandle.EnsoniqDir.dwDirectoryBlock, 2, ucOldDir))
+		{
+			LOG("Error writing directory blocks.\n");
+			CacheFlush(OldHandle.pDisk);
+			CacheFlush(NewHandle.pDisk);
+			return FS_FILE_WRITEERROR;
+		}
+		
+		if(1==g_pProgressProc(g_iPluginNr, OldName, NewName, 100))
+			return ERR_ABORTED;
+		
+		// only old handle has been modified
+		CacheFlush(OldHandle.pDisk);
+		
+		return FS_FILE_OK;
 	}
 
 	// scan new directory for desired entry
@@ -3410,18 +3546,6 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 	// destination (including special characters e.g. '*')
 	if (0==strcmp(cOldName,cNewName))
 		strcpy(cENewName, cEOldName);
-	else
-		strcpy(cENewName, cNewName);
-	
-	cENewName[13] = 0; // limit the size to 12 chars
-	while(strlen(cENewName)<12) strcat(cENewName, " "); // fill up with spaces
-	
-	
-	// note: cEOldName is unused here
-	strcpy(cEOldName, cOldName);
-	cEOldName[strlen(cEOldName)-9] = 0; // cut off ".[xx].EFE"
-	cEOldName[13] = 0; // limit the size to 12 chars
-	while(strlen(cEOldName)<12) strcat(cEOldName, " "); // fill up with spaces
 	
 
 	// if we come to here, the variables are set to the following values:
@@ -3474,6 +3598,31 @@ DLLEXPORT int __stdcall FsRenMovFile(char* OldName, char* NewName, BOOL Move,
 		if(OldHandle.pDisk==NewHandle.pDisk)
 		{
 			LOG("Moving directory entry: ");
+			
+			if (0!=strcmp(cOldName,cNewName)) // action involves renaming?
+			{
+			 	// TODO : this works only for instruments
+			 	if ( 0x03 != OldHandle.EnsoniqDir.Entry[iOldEntry].ucType )
+				{	
+					MessageBoxA(TC_HWND, "Renaming is currently only supported for instrument files. Aborting operation.", "EnsoniqFS · Error",
+						MB_ICONSTOP);
+					return ERR_ABORTED;
+				}
+				
+				// renaming is done at old location
+				
+				// change file name inside file
+				// TODO : this works only for instruments
+				iResult = RenameEnsoniqItem( OldHandle.pDisk, &(OldHandle.EnsoniqDir.Entry[iOldEntry]), cEOldName, cENewName );
+				if ( ERR_OK != iResult )
+				{	
+					return ERR_ABORTED;
+				}
+				
+				// prepare directory entry
+				memcpy(ucOldDir+iOldEntry*26+2, cENewName, 12);
+				
+			}
 			
 			// copy directory entry
 			memcpy(ucNewDir + iNewEntry*26, ucOldDir + iOldEntry*26, 26);
