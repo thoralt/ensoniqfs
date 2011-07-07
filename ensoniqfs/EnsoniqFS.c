@@ -2479,6 +2479,7 @@ DLLEXPORT int __stdcall FsPutFile(char* LocalName, char* RemoteName,
 						if(' '==cName2[j]) cName2[j] = 0;
 						else break;
 					}
+					MakeLegalName(cName2);
 					sprintf(cText, "%s\\%s.[%02i].EFE", Handle.cPath, cName2,
 						    Handle.EnsoniqDir.Entry[i].ucType);
 					if(!FsDeleteFile(cText))
