@@ -306,30 +306,24 @@ found in Thoralt Franz's document "The Ensoniq EPS/EPS16+/ASR-10 Bank Format"
 ### Problems with handling bank files
 
 Due to this concept used for the banks, some problems arouse:
-1) instruments and songs cannot be moved without invalidating the bank files
-   which point to these instruments/songs.
-2) the SCSI ID of a disk or the disk label cannot be changed (again
-   invalidates the references used in the banks).
-3) even when copying / moving banks together with the referenced files while
-   keeping the directory structure and using the same device type and disk
-   label, the references can get broken: this can happen when files are saved
-   in a different order to the target directory. E.g. the source directory
-   contains two instruments and a bank, which references the two instruments:
-    * File 1: Instrument1
-    * File 2: Instrument2
-    * File 3: Bank
+1. instruments and songs cannot be moved without invalidating the bank files which point to these instruments/songs.
+2. the SCSI ID of a disk or the disk label cannot be changed (again invalidates the references used in the banks).
+3. even when copying / moving banks together with the referenced files while keeping the directory structure and using the same device type and disk label, the references can get broken: this can happen when files are saved in a different order to the target directory. E.g. the source directory contains two instruments and a bank, which references the two instruments:
+* File 1: Instrument1
+* File 2: Instrument2
+* File 3: Bank
 
 
-  Now you copy these three files to a new directory in a different order:
-    * File 1: Instrument2
-    * File 2: Instrument1
-    * File 3: Bank
+Now you copy these three files to a new directory in a different order:
+* File 1: Instrument2
+* File 2: Instrument1
+* File 3: Bank
 
 
-  Since the bank works only with the file numbers, it will load the
-  instruments to the wrong tracks. Especially copying with TotalCommander
-  will certainly change the order since it processes the files in alphabetical
-  order.
+Since the bank works only with the file numbers, it will load the
+instruments to the wrong tracks. Especially copying with TotalCommander
+will certainly change the order since it processes the files in alphabetical
+order.
 
 The Ensoniq does not give any information when loading a bank where references
 are broken. If a file cannot be found, it skips it silently and goes on to the
