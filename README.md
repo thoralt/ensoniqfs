@@ -318,10 +318,14 @@ Due to this concept used for the banks, some problems arouse:
     * File 1: Instrument1
     * File 2: Instrument2
     * File 3: Bank
+
+
   Now you copy these three files to a new directory in a different order:
     * File 1: Instrument2
     * File 2: Instrument1
     * File 3: Bank
+
+
   Since the bank works only with the file numbers, it will load the
   instruments to the wrong tracks. Especially copying with TotalCommander
   will certainly change the order since it processes the files in alphabetical
