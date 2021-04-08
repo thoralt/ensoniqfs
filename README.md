@@ -1,4 +1,4 @@
-This is the origial README file from the project located at SourceForge. The project is currently being upgraded to work with 64 bit versions of TotalCommander.
+**This is the origial README file from the project located at SourceForge. The project is currently being upgraded to work with 64 bit versions of TotalCommander.**
 
 # What is EnsoniqFS?
 
